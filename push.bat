@@ -1,7 +1,8 @@
 @echo off
 chcp 65001 >nul
 echo ===================================================
-echo   FabMind v3.0 - 一鍵推送至遠端 Git 儲存庫
+echo   FabMind v3.0 - 一鍵推送至 GitHub 遠端儲存庫
+echo   目標倉庫: https://github.com/loveelysia5291/FabMind-v3.0.git
 echo ===================================================
 echo.
 
@@ -11,33 +12,26 @@ if not exist "%GIT_EXE%" (
     set "GIT_EXE=git"
 )
 
-set /p REMOTE_URL="請貼上您的遠端 Git 倉庫網址 (例如 https://github.com/your-name/fabmind.git): "
-
-if "%REMOTE_URL%"=="" (
-    echo [錯誤] 遠端網址不可為空！
-    pause
-    exit /b 1
-)
-
-echo.
-echo [1/3] 設定遠端 origin: %REMOTE_URL%
+echo [1/3] 確認遠端 origin 設定...
 "%GIT_EXE%" remote remove origin 2>nul
-"%GIT_EXE%" remote add origin %REMOTE_URL%
+"%GIT_EXE%" remote add origin https://github.com/loveelysia5291/FabMind-v3.0.git
 
-echo [2/3] 確認本地分支為 main...
+echo [2/3] 切換分支為 main...
 "%GIT_EXE%" branch -M main
 
-echo [3/3] 推送程式碼至遠端...
+echo [3/3] 正在推送到 GitHub...
+echo (若彈出 GitHub 登入視窗，請點選授權/登入)
 "%GIT_EXE%" push -u origin main
 
 if %errorlevel% equ 0 (
     echo.
     echo ===================================================
-    echo   恭喜！FabMind 專案已成功推送到遠端倉庫！
+    echo   🎉 恭喜！FabMind 專案已成功推送到 GitHub！
+    echo   倉庫網址: https://github.com/loveelysia5291/FabMind-v3.0
     echo ===================================================
 ) else (
     echo.
-    echo [提示] 若推送失敗，請確認該倉庫是否已建立，或檢查 GitHub 存取權限 (Personal Access Token)。
+    echo [提示] 推送若中斷，請確認是否已在彈出的瀏覽器視窗中完成 GitHub 登入。
 )
 
 pause

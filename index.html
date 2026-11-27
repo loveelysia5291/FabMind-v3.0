@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FabMind v3.0 | 晶圓製造與先進封測智慧排解站</title>
+  <title>FabMind v3.0 | 晶圓廠实际上機操作控制台 (Tool HMI Console)</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Chart.js CDN -->
@@ -52,141 +52,157 @@
     .cleanroom-mode .border-slate-800 {
       border-color: #615600 !important;
     }
-    @keyframes subtle-pulse {
+    @keyframes pulse-alarm {
       0%, 100% { border-color: rgba(239, 68, 68, 0.4); }
-      50% { border-color: rgba(239, 68, 68, 1); box-shadow: 0 0 16px rgba(239, 68, 68, 0.35); }
+      50% { border-color: rgba(239, 68, 68, 1); box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
     }
-    .pulse-danger {
-      animation: subtle-pulse 2s infinite;
+    .pulse-alarm {
+      animation: pulse-alarm 1.5s infinite;
+    }
+    /* 機台塔燈高光 */
+    .tower-light-active {
+      filter: drop-shadow(0 0 8px currentColor);
     }
   </style>
 </head>
 <body class="bg-fab-bg text-slate-100 min-h-screen font-sans selection:bg-cyan-500 selection:text-white" id="app">
   <div :class="{'cleanroom-mode': cleanroomMode}" class="min-h-screen flex flex-col">
     
-    <!-- 頂部極簡狀態列 -->
-    <header class="border-b border-fab-border bg-fab-bg/95 backdrop-blur sticky top-0 z-40 px-4 sm:px-8 py-3">
-      <div class="max-w-6xl mx-auto flex items-center justify-between">
+    <!-- 頂部機台實體機旁狀態列 (Tool-Side Status Bar) -->
+    <header class="border-b border-fab-border bg-fab-bg/95 backdrop-blur sticky top-0 z-40 px-4 sm:px-8 py-2.5">
+      <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
         
-        <!-- Logo 與標題 -->
+        <!-- Logo 與機台編號 -->
         <div class="flex items-center space-x-3">
-          <div class="w-9 h-9 rounded-lg bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300 font-extrabold text-lg">
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300 font-extrabold text-xl shadow-lg shadow-cyan-500/20">
             FM
           </div>
           <div>
             <div class="flex items-center space-x-2">
-              <span class="font-bold text-white text-base sm:text-lg tracking-wide">FabMind 即時排解站</span>
-              <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-500/30 font-mono">
-                {{ activeIndustryDomain === 'frontend' ? '前段晶圓製造 (Fab)' : '後段先進封測 (CoWoS/OSAT)' }}
+              <span class="font-extrabold text-white text-base sm:text-lg tracking-wide">機旁實際上機操控台</span>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-slate-900 border border-cyan-500/40 text-cyan-300 font-mono font-bold">
+                機台代號: {{ currentTargetDevice }}
               </span>
             </div>
-            <p class="text-xs text-slate-400 hidden sm:block">晶圓製造 ＆ 先進封裝測試「看懂根因 ➔ 防呆處置 ➔ 15秒結案」一站式工作流</p>
+            <p class="text-[11px] text-slate-400 font-mono">SECS/GEM 實體連線 • 雙手套觸控大按鈕操控 (無下拉選單)</p>
           </div>
         </div>
 
-        <!-- 領域切換、廠區選擇與模式 -->
-        <div class="flex items-center space-x-2 sm:space-x-3">
-          <!-- 前段製造 vs 後段封測領域切換按鈕 -->
-          <div class="flex items-center bg-slate-900 p-0.5 rounded-lg border border-slate-700 text-xs font-medium">
-            <button @click="switchDomain('frontend')" 
-              :class="activeIndustryDomain === 'frontend' ? 'bg-cyan-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
-              class="px-2.5 py-1 rounded transition">
-              前段晶圓
-            </button>
-            <button @click="switchDomain('backend')" 
-              :class="activeIndustryDomain === 'backend' ? 'bg-purple-600 text-white font-bold' : 'text-slate-400 hover:text-white'"
-              class="px-2.5 py-1 rounded transition">
-              先進封測
-            </button>
+        <!-- 機台實體三色警示塔燈 (Signal Tower) 與系統切換按鈕 -->
+        <div class="flex items-center space-x-3">
+          
+          <!-- 實體三色塔燈 (Signal Tower Light) -->
+          <div class="flex items-center bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 space-x-2">
+            <span class="text-[11px] text-slate-400 font-mono font-bold mr-1">塔燈:</span>
+            <!-- 紅燈 -->
+            <div :class="towerState === 'red' ? 'bg-red-500 text-red-500 tower-light-active animate-ping' : 'bg-red-950/60 border border-red-900/40'"
+              class="w-3.5 h-3.5 rounded-full transition-all"></div>
+            <!-- 黃燈 -->
+            <div :class="towerState === 'yellow' ? 'bg-amber-400 text-amber-400 tower-light-active animate-pulse' : 'bg-amber-950/60 border border-amber-900/40'"
+              class="w-3.5 h-3.5 rounded-full transition-all"></div>
+            <!-- 綠燈 -->
+            <div :class="towerState === 'green' ? 'bg-emerald-400 text-emerald-400 tower-light-active' : 'bg-emerald-950/60 border border-emerald-900/40'"
+              class="w-3.5 h-3.5 rounded-full transition-all"></div>
+            <span class="text-xs font-bold font-mono ml-1" :class="towerTextClass">{{ towerText }}</span>
           </div>
 
-          <!-- 廠區選擇 -->
-          <select v-model="currentFabKey" @change="onFabChange" class="bg-slate-900 border border-slate-700 text-xs text-cyan-300 rounded-lg px-2.5 py-1.5 focus:outline-none font-medium">
-            <optgroup label="前段晶圓製造廠 (Front-End Fab)">
-              <option value="Hsinchu_Fab12B">台灣竹科 Fab 12B (R&D 母廠)</option>
-              <option value="Tainan_Fab18">台灣南科 Fab 18 (GigaFab 量產)</option>
-            </optgroup>
-            <optgroup label="後段先進封裝與測試廠 (Back-End OSAT & CoWoS)">
-              <option value="Chiayi_AP6">台灣嘉義 AP6 (CoWoS/SoIC 先進封裝)</option>
-              <option value="Kaohsiung_ASE">台灣高雄 日月光 (先進測試與 SiP)</option>
-              <option value="Arizona_Amkor">美國亞利桑那 Amkor (海外先進封裝)</option>
-            </optgroup>
-          </select>
-
-          <!-- 音效開關 -->
-          <button @click="toggleSound" class="p-1.5 rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:text-white transition text-xs" :title="soundEnabled ? '音效已開啟' : '靜音模式'">
-            {{ soundEnabled ? '🔊' : '🔇' }}
+          <!-- 音效按鈕 -->
+          <button @click="toggleSound" class="p-2 rounded-xl border border-slate-800 bg-slate-900 text-slate-300 hover:text-white transition text-xs font-bold" :title="soundEnabled ? '音效開啟' : '靜音'">
+            {{ soundEnabled ? '🔊 提示音' : '🔇 靜音' }}
           </button>
 
-          <!-- 無塵室黃光切換 -->
+          <!-- 無塵室黃光按鈕 -->
           <button @click="cleanroomMode = !cleanroomMode" 
             :class="cleanroomMode ? 'bg-yellow-400 text-black font-bold' : 'bg-slate-900 text-yellow-300 border-slate-800'"
-            class="px-2.5 py-1.5 rounded-lg border text-xs flex items-center space-x-1 transition">
-            <span>{{ cleanroomMode ? '☀ 黃光防護' : '🌙 黃光護眼' }}</span>
+            class="px-3 py-2 rounded-xl border text-xs font-bold transition">
+            {{ cleanroomMode ? '☀ 黃光保護' : '🌙 黃光護眼' }}
           </button>
         </div>
 
       </div>
     </header>
 
-    <!-- 主內容區塊 -->
+    <!-- 主操控螢幕 (聚焦實體按鈕互動) -->
     <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-5">
 
-      <!-- ================= ⚡ 全新：實時時間與電氣功耗監控儀表 (Real-time Power & Telemetry) ================= -->
-      <div class="bg-fab-card rounded-2xl border border-cyan-500/30 p-4 shadow-xl">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-3">
-          
-          <!-- 即時時間時鐘 -->
+      <!-- ================= 廠區實體按鈕選擇列 (全部為大按鈕，拿掉下拉選單) ================= -->
+      <div class="bg-fab-card rounded-2xl border border-fab-border p-3.5 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center space-x-2 text-xs">
+          <span class="font-bold text-slate-300 whitespace-nowrap">連線廠區切換:</span>
+          <span class="text-[11px] text-slate-500 font-mono hidden sm:inline">(點選實體按鈕即時轉發)</span>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1 max-w-3xl text-xs font-mono">
+          <button v-for="fab in fabOptions" :key="fab.key"
+            @click="setFab(fab.key)"
+            :class="currentFabKey === fab.key ? 'bg-cyan-600 text-white font-bold ring-2 ring-cyan-400 shadow-md shadow-cyan-600/30' : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200'"
+            class="px-3 py-2 rounded-xl transition text-center truncate">
+            {{ fab.label }}
+          </button>
+        </div>
+      </div>
+
+      <!-- ================= ⚡ 上機電氣操控台：即時功率按鈕微調與時鐘 ================= -->
+      <div class="bg-fab-card rounded-2xl border border-cyan-500/30 p-5 shadow-xl space-y-4">
+        
+        <!-- 上方：即時時鐘與進片/上機循環大按鈕 -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
           <div class="flex items-center space-x-3 font-mono">
-            <div class="w-3 h-3 rounded-full" :class="isPowerRunning ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'"></div>
+            <span class="w-3 h-3 rounded-full" :class="isPowerRunning ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'"></span>
             <div>
-              <span class="text-xs text-slate-400 block font-sans">無塵室生產時鐘 (Real-time Clock)</span>
-              <span class="text-sm sm:text-base font-bold text-white tracking-wider">{{ liveClock }}</span>
+              <span class="text-xs text-slate-400 block font-sans">無塵室實時生產時鐘</span>
+              <span class="text-base font-bold text-white tracking-wider">{{ liveClock }}</span>
             </div>
-            <span class="text-xs px-2 py-0.5 rounded bg-slate-900 text-cyan-300 border border-slate-700">
-              運轉計時: {{ uptimeClock }}
+            <span class="text-xs px-2.5 py-1 rounded bg-slate-900 text-cyan-300 border border-slate-700 font-bold">
+              累計運轉: {{ uptimeClock }}
             </span>
           </div>
 
-          <!-- 互動啟動控制按鈕 -->
-          <div class="flex items-center space-x-2">
+          <!-- 實時實際上機作業按鈕 (進片 ➔ 點火 ➔ 退片) -->
+          <div class="flex flex-wrap items-center gap-2">
+            <button @click="loadWaferLot" :disabled="lotState !== 'idle'"
+              :class="lotState === 'idle' ? 'bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40' : 'bg-slate-950 text-slate-600 border-slate-900'"
+              class="px-3 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1">
+              <span>📥 載入晶圓 (Load Lot)</span>
+            </button>
+
             <button @click="togglePower" :disabled="isRamping"
               :class="isPowerRunning ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-600/30'"
-              class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5">
-              <span>{{ isPowerRunning ? '⏹️ 停止送電 (Power Off)' : '⚡ 點擊啟動機台送電 (Power On)' }}</span>
+              class="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5">
+              <span>{{ isPowerRunning ? '⏹️ 切斷停機 (Power Off)' : '⚡ 點擊啟動送電 (Power On)' }}</span>
             </button>
+
             <button @click="triggerEStop" 
-              class="px-3 py-2 bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-500/40 rounded-xl text-xs font-bold transition">
+              class="px-3 py-2 bg-red-950 hover:bg-red-900 text-red-300 border border-red-500/50 rounded-xl text-xs font-bold transition">
               🛑 緊急斷電 (E-Stop)
             </button>
           </div>
         </div>
 
-        <!-- 5 大電氣與功耗數據儀表卡 -->
-        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-3 text-xs font-mono">
+        <!-- 中間：5 大電氣與功耗數據儀表卡 -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs font-mono">
           
-          <!-- 1. 即時輸出功率 -->
-          <div class="p-3 bg-slate-950/90 rounded-xl border border-slate-800 relative overflow-hidden">
+          <!-- 即時功率 (含微調反饋) -->
+          <div class="p-3 bg-slate-950/90 rounded-xl border border-slate-800">
             <span class="text-slate-400 block font-sans">即時輸出功率 (Power)</span>
             <div class="text-xl sm:text-2xl font-extrabold mt-1" :class="isPowerRunning ? 'text-cyan-400' : 'text-slate-500'">
               {{ telemetry.power }} <span class="text-xs text-slate-400">W</span>
             </div>
-            <!-- 爬坡進度條 -->
             <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div class="bg-cyan-400 h-full transition-all duration-300" :style="{ width: (telemetry.power / targetPower * 100) + '%' }"></div>
+              <div class="bg-cyan-400 h-full transition-all duration-300" :style="{ width: Math.min(100, (telemetry.power / 2200 * 100)) + '%' }"></div>
             </div>
           </div>
 
-          <!-- 2. 工作電壓 -->
+          <!-- 工作電壓 -->
           <div class="p-3 bg-slate-950/90 rounded-xl border border-slate-800">
-            <span class="text-slate-400 block font-sans">工作電壓 (Voltage)</span>
+            <span class="text-slate-400 block font-sans">偏壓電壓 (Voltage)</span>
             <div class="text-xl sm:text-2xl font-extrabold mt-1" :class="isPowerRunning ? 'text-emerald-400' : 'text-slate-500'">
               {{ telemetry.voltage }} <span class="text-xs text-slate-400">V</span>
             </div>
-            <div class="text-[10px] text-slate-500 mt-1">三相 AC 380V 穩壓</div>
+            <div class="text-[10px] text-slate-500 mt-1">三相 380V 穩壓閉環</div>
           </div>
 
-          <!-- 3. 工作電流 -->
+          <!-- 工作電流 -->
           <div class="p-3 bg-slate-950/90 rounded-xl border border-slate-800">
             <span class="text-slate-400 block font-sans">負載電流 (Current)</span>
             <div class="text-xl sm:text-2xl font-extrabold mt-1" :class="isPowerRunning ? 'text-amber-400' : 'text-slate-500'">
@@ -195,16 +211,16 @@
             <div class="text-[10px] text-slate-500 mt-1">功率因數 PF: 0.98</div>
           </div>
 
-          <!-- 4. 累積功耗電量 -->
+          <!-- 累計能耗 -->
           <div class="p-3 bg-slate-950/90 rounded-xl border border-slate-800">
             <span class="text-slate-400 block font-sans">累計能耗 (Energy)</span>
             <div class="text-xl sm:text-2xl font-extrabold mt-1 text-purple-400">
               {{ telemetry.energyKwh }} <span class="text-xs text-slate-400">kWh</span>
             </div>
-            <div class="text-[10px] text-emerald-400 mt-1">實時秒級能耗統計</div>
+            <div class="text-[10px] text-emerald-400 mt-1">實時秒級能耗跳動</div>
           </div>
 
-          <!-- 5. 阻抗反射功率 (RF/ATE) -->
+          <!-- 反射功率 -->
           <div class="p-3 bg-slate-950/90 rounded-xl border border-slate-800">
             <span class="text-slate-400 block font-sans">反射功率 (Reflected)</span>
             <div class="text-xl sm:text-2xl font-extrabold mt-1" :class="telemetry.reflected > 10 ? 'text-red-400 animate-pulse' : 'text-emerald-400'">
@@ -216,93 +232,42 @@
           </div>
 
         </div>
+
+        <!-- 下方：實體微調按鈕群 (Push Buttons for Power & Bias Voltage) -->
+        <div class="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+          
+          <!-- 功率實體微調按鈕群 -->
+          <div class="flex items-center space-x-1.5">
+            <span class="text-slate-400 font-bold font-sans">功率實體微調 (W):</span>
+            <button @click="adjustPower(-50)" :disabled="!isPowerRunning" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-cyan-300 rounded-lg border border-slate-700 font-mono font-bold">-50W</button>
+            <button @click="adjustPower(-10)" :disabled="!isPowerRunning" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-cyan-300 rounded-lg border border-slate-700 font-mono font-bold">-10W</button>
+            <button @click="adjustPower(+10)" :disabled="!isPowerRunning" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-cyan-300 rounded-lg border border-slate-700 font-mono font-bold">+10W</button>
+            <button @click="adjustPower(+50)" :disabled="!isPowerRunning" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-cyan-300 rounded-lg border border-slate-700 font-mono font-bold">+50W</button>
+          </div>
+
+          <!-- 電壓實體微調按鈕群 -->
+          <div class="flex items-center space-x-1.5">
+            <span class="text-slate-400 font-bold font-sans">偏壓補償 (V):</span>
+            <button @click="adjustVoltage(-5)" :disabled="!isPowerRunning" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-amber-300 rounded-lg border border-slate-700 font-mono font-bold">-5V</button>
+            <button @click="adjustVoltage(-1)" :disabled="!isPowerRunning" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-amber-300 rounded-lg border border-slate-700 font-mono font-bold">-1V</button>
+            <button @click="adjustVoltage(+1)" :disabled="!isPowerRunning" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-amber-300 rounded-lg border border-slate-700 font-mono font-bold">+1V</button>
+            <button @click="adjustVoltage(+5)" :disabled="!isPowerRunning" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-amber-300 rounded-lg border border-slate-700 font-mono font-bold">+5V</button>
+          </div>
+
+          <!-- 故障注入模擬按鈕 -->
+          <div class="flex items-center space-x-1.5">
+            <button @click="injectFault" class="px-3 py-1 bg-red-950 hover:bg-red-900 text-red-300 border border-red-500/50 rounded-lg font-bold transition">
+              ⚡ 模擬故障突發 (Inject Fault)
+            </button>
+          </div>
+
+        </div>
+
       </div>
 
-      <!-- ================= 廠區即時真實數據總覽膠囊 ================= -->
-      <div class="bg-fab-card rounded-2xl border border-fab-border p-4 shadow-lg">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-2">
-          <div class="flex items-center space-x-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
-            <span class="text-xs font-bold text-white uppercase tracking-wider">廠區即時真實指標 ({{ currentFabData.name }})</span>
-            <span class="text-[10px] bg-slate-800 text-cyan-300 px-2 py-0.5 rounded font-mono">{{ currentFabData.node }}</span>
-          </div>
-          <div class="text-xs text-slate-400 font-mono">
-            封測品質政策: <strong class="text-purple-400">🛡️ {{ currentFabData.qualityPolicy }}</strong>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-xs font-mono">
-          <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800">
-            <span class="text-slate-400 block font-sans">總設備數 / 在線稼動</span>
-            <span class="text-base font-bold text-white">{{ currentFabData.toolCount }} 台</span>
-            <span class="text-[10px] text-emerald-400 ml-1">({{ currentFabData.onlinePercent }}% 稼動)</span>
-          </div>
-
-          <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800">
-            <span class="text-slate-400 block font-sans">封測綜合良率 / OEE</span>
-            <span class="text-base font-bold text-cyan-400">{{ currentFabData.oee }}%</span>
-            <span class="text-[10px] text-slate-500 ml-1">良率 {{ currentFabData.yield }}%</span>
-          </div>
-
-          <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800">
-            <span class="text-slate-400 block font-sans">KGD 篩選/偽不良率 (Overkill)</span>
-            <span class="text-base font-bold text-emerald-400">{{ currentFabData.overkillRate }}%</span>
-            <span class="text-[10px] text-emerald-400 ml-1">(降損保護)</span>
-          </div>
-
-          <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800">
-            <span class="text-slate-400 block font-sans">平均換模/排查耗時 MTTR</span>
-            <span class="text-base font-bold text-amber-400">{{ currentFabData.mttr }} 小時</span>
-            <span class="text-[10px] text-slate-400 ml-1">(縮短 36.5%)</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- ================= 封測與製造關鍵工作狀態切換按鈕群 ================= -->
-      <div class="bg-fab-card rounded-2xl border border-fab-border p-4 shadow-lg space-y-2">
-        <div class="flex items-center justify-between text-xs pb-2 border-b border-slate-800">
-          <span class="font-bold text-slate-200">設備異常狀態切換（點選切換對應封測難題與即時解決對策）：</span>
-          <span class="text-slate-400 font-mono">目前目標設備: <strong class="text-cyan-300">{{ currentTargetDevice }}</strong></span>
-        </div>
-
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
-          <!-- 狀態 1: 報警停機 -->
-          <button @click="setMachineState('alarm')"
-            :class="machineState === 'alarm' ? 'bg-red-600 text-white font-bold ring-2 ring-red-400 shadow-lg shadow-red-600/30' : 'bg-slate-900 text-slate-300 border border-slate-800 hover:border-red-500/50'"
-            class="p-2.5 rounded-xl transition flex items-center justify-center space-x-1.5">
-            <span class="w-2 h-2 rounded-full" :class="machineState === 'alarm' ? 'bg-white animate-ping' : 'bg-red-500'"></span>
-            <span>🔴 報警停機 (ALARM)</span>
-          </button>
-
-          <!-- 狀態 2: 早期偏移預警 -->
-          <button @click="setMachineState('warning')"
-            :class="machineState === 'warning' ? 'bg-amber-600 text-white font-bold ring-2 ring-amber-400 shadow-lg shadow-amber-600/30' : 'bg-slate-900 text-slate-300 border border-slate-800 hover:border-amber-500/50'"
-            class="p-2.5 rounded-xl transition flex items-center justify-center space-x-1.5">
-            <span class="w-2 h-2 rounded-full" :class="machineState === 'warning' ? 'bg-white animate-pulse' : 'bg-amber-400'"></span>
-            <span>🟠 測試飄移/偽不良預警</span>
-          </button>
-
-          <!-- 狀態 3: 預防保養 -->
-          <button @click="setMachineState('pm')"
-            :class="machineState === 'pm' ? 'bg-purple-600 text-white font-bold ring-2 ring-purple-400 shadow-lg shadow-purple-600/30' : 'bg-slate-900 text-slate-300 border border-slate-800 hover:border-purple-500/50'"
-            class="p-2.5 rounded-xl transition flex items-center justify-center space-x-1.5">
-            <span class="w-2 h-2 rounded-full" :class="machineState === 'pm' ? 'bg-white' : 'bg-purple-400'"></span>
-            <span>🟡 換模/清針定保 (PM)</span>
-          </button>
-
-          <!-- 狀態 4: 正常生產 -->
-          <button @click="setMachineState('running')"
-            :class="machineState === 'running' ? 'bg-emerald-600 text-white font-bold ring-2 ring-emerald-400 shadow-lg shadow-emerald-600/30' : 'bg-slate-900 text-slate-300 border border-slate-800 hover:border-emerald-500/50'"
-            class="p-2.5 rounded-xl transition flex items-center justify-center space-x-1.5">
-            <span class="w-2 h-2 rounded-full" :class="machineState === 'running' ? 'bg-white animate-pulse' : 'bg-emerald-400'"></span>
-            <span>🟢 封裝測試量產中</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- ================= 核心工作流：四步直覺解決卡 ================= -->
+      <!-- ================= 核心工作流：四步直覺排解與操作卡 ================= -->
       
-      <!-- 步驟 1: 發生了什麼？（現況與根因判定） -->
+      <!-- 步驟 1: 發生了什麼？ -->
       <div :class="stateCardStyle.border" class="bg-fab-card rounded-2xl border-2 p-5 shadow-2xl relative overflow-hidden transition-all duration-300">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
           <div class="flex items-center space-x-2.5">
@@ -385,17 +350,17 @@
             </div>
           </div>
 
-          <!-- 替代方案快速切換 -->
-          <div class="bg-slate-900/80 rounded-xl p-3 border border-slate-800 text-xs space-y-2">
-            <span class="text-slate-400 font-bold block">備用對策方案：</span>
-            <div class="p-2 rounded bg-slate-950 border border-slate-800 text-slate-300 cursor-pointer hover:border-cyan-500/40 transition">
-              <div class="font-bold text-slate-200">{{ currentDomainStateData.secondaryAction.name }}</div>
-              <div class="text-[11px] text-slate-400 mt-0.5">{{ currentDomainStateData.secondaryAction.desc }}</div>
+          <!-- 實體執行按鈕 -->
+          <div class="bg-slate-900/80 rounded-xl p-3 border border-slate-800 text-xs space-y-2 flex flex-col justify-between">
+            <div>
+              <span class="text-slate-400 font-bold block mb-1">機旁實體執行:</span>
+              <p class="text-[11px] text-slate-400 leading-relaxed">
+                戴手套點選「立即套用排解」，系統將自動引導機台復歸零點並校正阻抗。
+              </p>
             </div>
-            <div class="p-2 rounded bg-slate-950 border border-slate-800 text-slate-400 cursor-pointer hover:border-cyan-500/40 transition">
-              <div class="font-bold">{{ currentDomainStateData.tertiaryAction.name }}</div>
-              <div class="text-[11px] mt-0.5">{{ currentDomainStateData.tertiaryAction.desc }}</div>
-            </div>
+            <button @click="applyActionDirectly" class="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-bold transition shadow-md shadow-cyan-600/30">
+              🔧 立即套用此處置
+            </button>
           </div>
         </div>
       </div>
@@ -418,10 +383,9 @@
           </span>
         </div>
 
-        <!-- 三大核心安全條件（圖示化大卡片） -->
+        <!-- 三大核心安全條件 -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-4">
           
-          <!-- 條件 1 -->
           <div :class="currentDomainStateData.interlocks.c1_ok ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-red-500/50 bg-red-950/20'"
             class="p-3.5 rounded-xl border flex items-center space-x-3 transition">
             <div class="text-3xl">{{ currentDomainStateData.interlocks.c1_icon }}</div>
@@ -436,7 +400,6 @@
             </div>
           </div>
 
-          <!-- 條件 2 -->
           <div :class="currentDomainStateData.interlocks.c2_ok ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-amber-500/50 bg-amber-950/20'"
             class="p-3.5 rounded-xl border flex items-center space-x-3 transition">
             <div class="text-3xl">{{ currentDomainStateData.interlocks.c2_icon }}</div>
@@ -451,7 +414,6 @@
             </div>
           </div>
 
-          <!-- 條件 3 -->
           <div :class="currentDomainStateData.interlocks.c3_ok ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-amber-500/50 bg-amber-950/20'"
             class="p-3.5 rounded-xl border flex items-center space-x-3 transition">
             <div class="text-3xl">{{ currentDomainStateData.interlocks.c3_icon }}</div>
@@ -533,8 +495,8 @@
     <!-- 極簡頁腳 -->
     <footer class="border-t border-fab-border bg-fab-bg px-4 py-3 text-center text-xs text-slate-500">
       <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-1">
-        <span>FabMind v3.0 | 晶圓製造與先進封裝測試 (CoWoS/ATE) 智慧排解方案</span>
-        <span class="text-[11px] font-mono">Air-gapped OSAT & Fab Sandbox • Zero-Trust Enforced</span>
+        <span>FabMind v3.0 | 晶圓製造與先進封裝測試 (CoWoS/ATE) 實際上機操控工作站</span>
+        <span class="text-[11px] font-mono">Tool HMI Touchscreen Console • Zero-Trust Enforced</span>
       </div>
     </footer>
 
@@ -553,9 +515,29 @@
         const closureSummary = ref('');
         const engineerNote = ref('');
 
+        // 廠區按鈕選項 (無下拉選單)
+        const fabOptions = ref([
+          { key: 'Chiayi_AP6', label: '台灣嘉義 AP6 (CoWoS)' },
+          { key: 'Kaohsiung_ASE', label: '台灣高雄 日月光 (ATE)' },
+          { key: 'Hsinchu_Fab12B', label: '台灣竹科 12B (R&D)' },
+          { key: 'Tainan_Fab18', label: '台灣南科 18 (量產)' }
+        ]);
+        const currentFabKey = ref('Chiayi_AP6');
+
+        const setFab = (key) => {
+          currentFabKey.value = key;
+          playBeep(650, 0.08);
+          closureSummary.value = '';
+          if (key === 'Chiayi_AP6' || key === 'Kaohsiung_ASE') {
+            activeIndustryDomain.value = 'backend';
+          } else {
+            activeIndustryDomain.value = 'frontend';
+          }
+        };
+
         // 實時時間與運轉計時器
         const liveClock = ref('');
-        const uptimeSeconds = ref(15155); // 04:12:35 起步
+        const uptimeSeconds = ref(15155);
         const uptimeClock = computed(() => {
           const h = String(Math.floor(uptimeSeconds.value / 3600)).padStart(2, '0');
           const m = String(Math.floor((uptimeSeconds.value % 3600) / 60)).padStart(2, '0');
@@ -563,10 +545,18 @@
           return `${h}:${m}:${s}`;
         });
 
+        // 晶圓批次流轉狀態 (Idle -> Loaded -> Running -> Unloaded)
+        const lotState = ref('idle');
+        const loadWaferLot = () => {
+          lotState.value = 'loaded';
+          playBeep(520, 0.15);
+          alert('📥 晶圓批次 [LOT-W26-8894] 已由 OHT 天車自動裝載至 FOUP 傳送腔！請點擊啟動送電！');
+        };
+
         // 實時電氣功耗數據 (Telemetry)
         const isPowerRunning = ref(false);
         const isRamping = ref(false);
-        const targetPower = computed(() => activeIndustryDomain.value === 'frontend' ? 1850 : 800);
+        const targetPower = ref(800);
 
         const telemetry = ref({
           power: 0,
@@ -576,7 +566,28 @@
           reflected: 0
         });
 
-        // 點擊啟動機台送電 (功率平滑爬坡)
+        // 機台塔燈狀態 (Red / Yellow / Green)
+        const machineState = ref('alarm');
+
+        const towerState = computed(() => {
+          if (machineState.value === 'alarm') return 'red';
+          if (machineState.value === 'warning' || machineState.value === 'pm') return 'yellow';
+          return 'green';
+        });
+
+        const towerText = computed(() => {
+          if (towerState.value === 'red') return 'ALARM (警報停機)';
+          if (towerState.value === 'yellow') return 'WARN / PM (待機警戒)';
+          return 'RUN (穩定生產中)';
+        });
+
+        const towerTextClass = computed(() => {
+          if (towerState.value === 'red') return 'text-red-400';
+          if (towerState.value === 'yellow') return 'text-amber-400';
+          return 'text-emerald-400';
+        });
+
+        // 點擊啟動送電
         const togglePower = () => {
           if (!isPowerRunning.value) {
             startPowerRamp();
@@ -587,28 +598,30 @@
 
         const startPowerRamp = () => {
           isRamping.value = true;
+          machineState.value = 'running';
           playBeep(440, 0.2);
           let currentP = 0;
           telemetry.value.voltage = 380.2;
-          const target = targetPower.value;
-          const step = target / 20;
+          const target = activeIndustryDomain.value === 'frontend' ? 1850 : 800;
+          targetPower.value = target;
+          const step = target / 15;
 
           const rampInterval = setInterval(() => {
             currentP += step;
             if (currentP >= target) {
               clearInterval(rampInterval);
               telemetry.value.power = target;
-              telemetry.value.current = parseFloat((target / 380).toFixed(2));
-              telemetry.value.reflected = machineState.value === 'alarm' ? 120 : (machineState.value === 'warning' ? 14 : 2);
+              telemetry.value.current = parseFloat((target / 380.2).toFixed(2));
+              telemetry.value.reflected = 2;
               isPowerRunning.value = true;
               isRamping.value = false;
-              playBeep(880, 0.3);
+              playBeep(880, 0.25);
             } else {
-              telemetry.value.power = Math.round(currentP + (Math.random() * 8 - 4));
-              telemetry.value.current = parseFloat((telemetry.value.power / 380).toFixed(2));
-              playBeep(600 + (currentP / 5), 0.03);
+              telemetry.value.power = Math.round(currentP + (Math.random() * 6 - 3));
+              telemetry.value.current = parseFloat((telemetry.value.power / 380.2).toFixed(2));
+              playBeep(500 + (currentP / 6), 0.02);
             }
-          }, 80);
+          }, 60);
         };
 
         const stopPower = () => {
@@ -617,97 +630,49 @@
           telemetry.value.voltage = 0;
           telemetry.value.current = 0;
           telemetry.value.reflected = 0;
+          machineState.value = 'pm';
           playBeep(300, 0.25);
         };
 
         const triggerEStop = () => {
           stopPower();
-          setMachineState('alarm');
-          alert('🛑 緊急安全斷電 (E-Stop) 已觸發！全機高壓與射頻已強制開路斷開！');
+          machineState.value = 'alarm';
+          playBeep(250, 0.4);
+          alert('🛑 緊急斷電 (E-Stop) 觸發！高壓與射頻已強制開路斷開！');
+        };
+
+        // 實體按鈕微調功率
+        const adjustPower = (delta) => {
+          if (!isPowerRunning.value) return;
+          telemetry.value.power = Math.max(100, telemetry.value.power + delta);
+          telemetry.value.current = parseFloat((telemetry.value.power / 380.2).toFixed(2));
+          playBeep(700 + delta, 0.05);
+        };
+
+        // 實體按鈕微調電壓
+        const adjustVoltage = (delta) => {
+          if (!isPowerRunning.value) return;
+          telemetry.value.voltage = parseFloat((telemetry.value.voltage + delta).toFixed(1));
+          playBeep(600 + delta * 10, 0.05);
+        };
+
+        // 一鍵模擬故障突發
+        const injectFault = () => {
+          machineState.value = 'alarm';
+          telemetry.value.reflected = 120; // 阻抗失諧跳變
+          playBeep(280, 0.35);
+        };
+
+        // 立即套用排解處置
+        const applyActionDirectly = () => {
+          machineState.value = 'running';
+          telemetry.value.reflected = 2; // 阻抗恢復
+          playBeep(1040, 0.2);
+          alert('🔧 處置已成功在線套用！機台完成回歸零點校準，塔燈恢復綠燈 RUN！');
         };
 
         // 前段晶圓製造 vs 後段先進封測領域
         const activeIndustryDomain = ref('backend');
-
-        const switchDomain = (domain) => {
-          activeIndustryDomain.value = domain;
-          closureSummary.value = '';
-          engineerNote.value = '';
-          stopPower();
-          playBeep(domain === 'backend' ? 750 : 550, 0.1);
-          if (domain === 'backend') {
-            currentFabKey.value = 'Chiayi_AP6';
-          } else {
-            currentFabKey.value = 'Hsinchu_Fab12B';
-          }
-        };
-
-        // 廠區真實資料庫
-        const fabsData = {
-          Hsinchu_Fab12B: {
-            name: '台灣竹科 Fab 12B (R&D 母廠)',
-            node: 'N2 / N3E 先進製程研發',
-            toolCount: 128,
-            onlinePercent: 98.4,
-            oee: 94.8,
-            yield: 92.4,
-            overkillRate: 0.12,
-            mttr: 2.1,
-            qualityPolicy: 'Golden Tool 黃金機台對齊基準'
-          },
-          Tainan_Fab18: {
-            name: '台灣南科 Fab 18 (GigaFab 量產)',
-            node: 'N3 / N4 滿載量產',
-            toolCount: 340,
-            onlinePercent: 96.8,
-            oee: 92.4,
-            yield: 91.5,
-            overkillRate: 0.15,
-            mttr: 2.4,
-            qualityPolicy: '超高產能連鎖警報即時壓制'
-          },
-          Chiayi_AP6: {
-            name: '台灣嘉義 AP6 (CoWoS / SoIC 先進封裝)',
-            node: 'CoWoS-S / CoWoS-L (GPU + 8 HBM3e)',
-            toolCount: 96,
-            onlinePercent: 94.2,
-            oee: 89.6,
-            yield: 98.2,
-            overkillRate: 0.08,
-            mttr: 1.8,
-            qualityPolicy: '防範整顆 GPU+HBM 複合模組報廢 (KGD 保證)'
-          },
-          Kaohsiung_ASE: {
-            name: '台灣高雄 日月光 (先進測試與 SiP)',
-            node: '高速 ATE 測試 / 超微距探針卡 / 系統級測試 (SLT)',
-            toolCount: 220,
-            onlinePercent: 91.5,
-            oee: 88.2,
-            yield: 96.5,
-            overkillRate: 0.22,
-            mttr: 2.6,
-            qualityPolicy: '探針接觸阻抗 (Cres) 動態補償防偽不良'
-          },
-          Arizona_Amkor: {
-            name: '美國亞利桑那 Amkor (海外先進封裝廠)',
-            node: '2.5D 先進封裝良率爬坡 (Ramp-up)',
-            toolCount: 58,
-            onlinePercent: 86.0,
-            oee: 82.5,
-            yield: 94.2,
-            overkillRate: 0.35,
-            mttr: 3.9,
-            qualityPolicy: '母廠經驗零外洩複製 (受限動作空間)'
-          }
-        };
-
-        const currentFabKey = ref('Chiayi_AP6');
-        const currentFabData = computed(() => fabsData[currentFabKey.value]);
-
-        const onFabChange = () => {
-          playBeep(650, 0.08);
-          closureSummary.value = '';
-        };
 
         // 當前目標設備與製程站點
         const currentTargetDevice = computed(() => {
@@ -730,10 +695,7 @@
           }
         });
 
-        // 機台工作狀態切換 (4 大狀態)
-        const machineState = ref('alarm');
-
-        // 前段資料庫 vs 後段封測資料庫
+        // 領域狀態資料庫
         const domainStateDatabase = {
           backend: {
             alarm: {
@@ -754,8 +716,6 @@
                 stock: '8 片',
                 description: '載入自動清膠程式，以耐高溫清潔片擦除吸嘴微殘碳，執行自動光學（AOI）吸嘴平整度校準（目標 < 0.2um）。'
               },
-              secondaryAction: { name: '對策 2: 微調熱壓頭四角水平千分尺', desc: '手動微調 0.3um 補償' },
-              tertiaryAction: { name: '對策 3: 抽檢前批 C-SAM 超音波掃描', desc: '確認有無空洞 (Underfill Voids)' },
               interlockTitle: 'TCB 熱壓機硬體安全互鎖 (Interlock)',
               interlocks: {
                 allPassed: true,
@@ -801,8 +761,6 @@
                 stock: '15 片在庫',
                 description: '自動派送清潔晶圓進行 5 次 Overdrive 0.8um 輕度研磨，刮除針尖氧化層，使 Cres 阻抗回落至 < 0.5Ω。'
               },
-              secondaryAction: { name: '對策 2: 調高 ATE 訊號驅動電壓 50mV', desc: '穿透輕微氧化層' },
-              tertiaryAction: { name: '對策 3: 拆卡離線超音波清洗', desc: '若砂紙無效需換探針卡' },
               interlockTitle: 'ATE 高速測試機安全互鎖',
               interlocks: {
                 allPassed: true,
@@ -847,8 +805,6 @@
                 stock: '20 組',
                 description: '拆卸磨損撞針，超音波清洗膠閥內部，回裝後進行 0.05mg 微量點膠稱重校正。'
               },
-              secondaryAction: { name: '步驟 2: 探針卡雷射平整度回測', desc: '干涉儀測量針尖共面度' },
-              tertiaryAction: { name: '步驟 3: 液冷頭散熱膏更換', desc: '確保 SLT 散熱效能' },
               interlockTitle: '封測維護安全互鎖',
               interlocks: {
                 allPassed: true,
@@ -893,27 +849,25 @@
                 stock: '滿載生產中',
                 description: '本批次將於 8 分鐘後完成貼合，自動送往真空脫泡固化爐。'
               },
-              secondaryAction: { name: '監控項目: 熱壓頭微凸塊高度', desc: '即時 14.2um (標準)' },
-              tertiaryAction: { name: '監控項目: ATE 測試機日產出', desc: '達標率 104%' },
               interlockTitle: '量產中安全防呆鎖定',
               interlocks: {
-                allPassed: false,
+                allPassed: true,
                 c1_icon: '🔥',
                 c1_name: '熱壓頭加熱狀態',
                 c1_val: '260 °C (製程中)',
-                c1_desc: '熱壓高溫進行中，嚴禁開門',
-                c1_ok: false,
+                c1_desc: '熱壓高溫進行中，安全門鎖定',
+                c1_ok: true,
                 c2_icon: '⚡',
                 c2_name: '伺服加壓壓力',
                 c2_val: '45.0 N (加壓中)',
                 c2_desc: '高精度下壓作業中',
-                c2_ok: false,
+                c2_ok: true,
                 c3_icon: '🛡️',
                 c3_name: '全密封防塵安全罩',
                 c3_val: 'Locked',
                 c3_desc: '安全罩互鎖鎖定中',
                 c3_ok: true,
-                notice: '量產運作中禁止人為手動干預。'
+                notice: ''
               },
               snippets: [
                 '本批次 CoWoS 貼合完成，良率 100%。',
@@ -941,8 +895,6 @@
                 stock: '3 件',
                 description: '更換已損耗之真空可變電容，確認接點無碳化，以測試模式 50W 檢驗反向功率降至 0W。'
               },
-              secondaryAction: { name: '處置 2: 節流閥擺角校驗', desc: '信心度 82% | EAP 參數調校' },
-              tertiaryAction: { name: '處置 3: 濕式擦拭保養', desc: '信心度 45% | 需主管簽核' },
               interlockTitle: '蝕刻腔體硬體安全互鎖 (Interlock)',
               interlocks: {
                 allPassed: true,
@@ -987,8 +939,6 @@
                 stock: '即時套用',
                 description: '透過線上參數動態微調收斂反向功率，讓阻抗回歸黃金曲線容差範圍內。'
               },
-              secondaryAction: { name: '對策 2: 安排下一 PM 梯次檢查電容', desc: '提早備料 C45 電容' },
-              tertiaryAction: { name: '對策 3: 晶圓抽樣量測 CD 厚度', desc: '通知品管抽檢' },
               interlockTitle: '製程線上安全互鎖',
               interlocks: {
                 allPassed: true,
@@ -1033,8 +983,6 @@
                 stock: '12 套',
                 description: '使用高純度異丙醇 (IPA) 濕式擦拭腔體內壁，塗抹真空潤滑脂，閉門執行氦氣檢漏 (< 0.2 sccm)。'
               },
-              secondaryAction: { name: '步驟 2: MFC 氣體流量計零點重校', desc: 'Horiba MFC 校驗' },
-              tertiaryAction: { name: '步驟 3: 幫浦抽速基準回測', desc: '記錄抽至 0.01 mTorr 時間' },
               interlockTitle: '晶圓前段 PM 安全互鎖',
               interlocks: {
                 allPassed: true,
@@ -1079,16 +1027,14 @@
                 stock: '25 片全滿',
                 description: '批次即將於 12 分鐘後完成主刻蝕，自動由 OHT 天車派送至下一站機台。'
               },
-              secondaryAction: { name: '監控項目: ESC 吸盤背壓流速', desc: '目前 0.18 sccm (極佳)' },
-              tertiaryAction: { name: '監控項目: 射頻阻抗相角', desc: '目前 0.2° (完全匹配)' },
               interlockTitle: '正常量產安全鎖定',
               interlocks: {
-                allPassed: false,
+                allPassed: true,
                 c1_icon: '⚡',
                 c1_name: 'RF 射頻主電源',
                 c1_val: '1850 W (發電中)',
                 c1_desc: '電漿激發作業中',
-                c1_ok: false,
+                c1_ok: true,
                 c2_icon: '🌪️',
                 c2_name: '反應腔氣壓',
                 c2_val: '12.4 mTorr (工作氣壓)',
@@ -1099,7 +1045,7 @@
                 c3_val: '65.0 °C (控溫中)',
                 c3_desc: '晶圓吸附恆溫中',
                 c3_ok: true,
-                notice: '正常生產中禁止手動干預。'
+                notice: ''
               },
               snippets: [
                 '本批次生產完成，無任何異常。',
@@ -1114,19 +1060,9 @@
           return domainStateDatabase[activeIndustryDomain.value][machineState.value];
         });
 
-        const setMachineState = (st) => {
-          machineState.value = st;
-          closureSummary.value = '';
-          engineerNote.value = '';
-          if (st === 'alarm') {
-            stopPower();
-          }
-          playBeep(st === 'alarm' ? 400 : 700, 0.1);
-        };
-
         const stateCardStyle = computed(() => {
           if (machineState.value === 'alarm') {
-            return { border: 'border-red-500/80 pulse-danger', badgeBg: 'bg-red-600', textAccent: 'text-red-400' };
+            return { border: 'border-red-500/80 pulse-alarm', badgeBg: 'bg-red-600', textAccent: 'text-red-400' };
           } else if (machineState.value === 'warning') {
             return { border: 'border-amber-500/80', badgeBg: 'bg-amber-600', textAccent: 'text-amber-400' };
           } else if (machineState.value === 'pm') {
@@ -1172,7 +1108,7 @@
             isCompleting.value = false;
             const extra = engineerNote.value ? `【現場口述補充】: ${engineerNote.value}` : '';
             closureSummary.value = `[8D 改善交班報告 - ${new Date().toLocaleTimeString()}]
-【領域/廠區】: ${activeIndustryDomain.value === 'backend' ? '後段先進封測 (OSAT)' : '前段晶圓製造 (Fab)'} | ${currentFabData.value.name}
+【領域/廠區】: ${activeIndustryDomain.value === 'backend' ? '後段先進封測 (OSAT)' : '前段晶圓製造 (Fab)'} | ${currentFabKey.value}
 【目標設備】: ${currentTargetDevice.value} (${currentProcessStation.value})
 【狀態判定】: ${currentDomainStateData.value.badgeText}
 【處置方案】: 依 ${currentDomainStateData.value.primaryAction.sop} 執行「${currentDomainStateData.value.primaryAction.actionName}」（料號: ${currentDomainStateData.value.primaryAction.partNo}）
@@ -1207,10 +1143,8 @@ ${extra}
             liveClock.value = now.toLocaleDateString() + ' ' + now.toTimeString().split(' ')[0];
             uptimeSeconds.value++;
 
-            // 若在送電中，累計耗電度數微量上升
             if (isPowerRunning.value) {
               telemetry.value.energyKwh = parseFloat((telemetry.value.energyKwh + 0.0005).toFixed(3));
-              // 微幅波動模擬真實雜訊
               telemetry.value.power = Math.round(targetPower.value + (Math.random() * 6 - 3));
               telemetry.value.current = parseFloat((telemetry.value.power / 380.2).toFixed(2));
             }
@@ -1222,15 +1156,15 @@ ${extra}
         return {
           cleanroomMode,
           soundEnabled,
-          activeIndustryDomain,
-          switchDomain,
+          fabOptions,
           currentFabKey,
-          currentFabData,
-          onFabChange,
+          setFab,
           currentTargetDevice,
           currentProcessStation,
+          towerState,
+          towerText,
+          towerTextClass,
           machineState,
-          setMachineState,
           currentDomainStateData,
           stateCardStyle,
           engineerNote,
@@ -1244,12 +1178,17 @@ ${extra}
           download8D,
           liveClock,
           uptimeClock,
+          lotState,
+          loadWaferLot,
           isPowerRunning,
           isRamping,
           telemetry,
-          targetPower,
           togglePower,
-          triggerEStop
+          triggerEStop,
+          adjustPower,
+          adjustVoltage,
+          injectFault,
+          applyActionDirectly
         };
       }
     }).mount('#app');
