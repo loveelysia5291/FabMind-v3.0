@@ -6,7 +6,8 @@
   "scripts": {
     "start": "python server.py 8080",
     "serve": "python -m http.server 8080",
-    "build": "echo 'Ready for static deployment!'"
+    "build": "echo 'Ready for static deployment!'",
+    "deploy:cf": "npx wrangler pages deploy . --project-name=fabmind-v3 --branch=main"
   },
   "keywords": [
     "semiconductor",
