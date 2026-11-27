@@ -82,14 +82,14 @@
           </div>
         </div>
 
-        <!-- 快捷操作控制 (切換機台、音效、無塵室黃光) -->
+        <!-- 快捷操作控制 (切換工廠、音效、無塵室黃光) -->
         <div class="flex items-center space-x-2 sm:space-x-3">
           <!-- 廠區選擇 -->
-          <select v-model="currentFab" class="bg-slate-900 border border-slate-800 text-xs text-cyan-300 rounded-lg px-2.5 py-1.5 focus:outline-none">
-            <option value="Hsinchu_Fab12B">台灣竹科 Fab 12B (Golden)</option>
-            <option value="Tainan_Fab18">台灣南科 Fab 18</option>
-            <option value="Kumamoto_JASM">日本熊本 JASM (海外廠)</option>
-            <option value="Arizona_Fab21">美國亞利桑那 Fab 21 (海外廠)</option>
+          <select v-model="currentFabKey" @change="onFabChange" class="bg-slate-900 border border-slate-700 text-xs text-cyan-300 rounded-lg px-2.5 py-1.5 focus:outline-none font-medium">
+            <option value="Hsinchu_Fab12B">台灣竹科 Fab 12B (R&D 母廠)</option>
+            <option value="Tainan_Fab18">台灣南科 Fab 18 (量產超大型晶圓廠)</option>
+            <option value="Kumamoto_JASM">日本熊本 JASM (車用晶片新廠)</option>
+            <option value="Arizona_Fab21">美國亞利桑那 Fab 21 (先進新廠)</option>
           </select>
 
           <!-- 音效開關 -->
@@ -108,70 +108,148 @@
       </div>
     </header>
 
-    <!-- 主內容區塊 (聚焦於看得懂與快速解決) -->
+    <!-- 主內容區塊 -->
     <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-5">
 
-      <!-- ================= 核心工作流：四步直覺解決卡 ================= -->
+      <!-- ================= 廠區即時真實數據總覽膠囊 (Fab Live Metrics) ================= -->
+      <div class="bg-fab-card rounded-2xl border border-fab-border p-4 shadow-lg">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-2">
+          <div class="flex items-center space-x-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+            <span class="text-xs font-bold text-white uppercase tracking-wider">廠區即時真實運行指標 ({{ currentFabData.name }})</span>
+            <span class="text-[10px] bg-slate-800 text-cyan-300 px-2 py-0.5 rounded font-mono">{{ currentFabData.node }}</span>
+          </div>
+          <div class="text-xs text-slate-400 font-mono">
+            配方防護策略: <strong :class="currentFabData.recipeShield ? 'text-purple-400' : 'text-emerald-400'">{{ currentFabData.recipeShield ? '🔒 OPA 敏感配方遮蔽 (零外洩)' : '✔ 母廠完整權限放行' }}</strong>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-xs font-mono">
+          <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800">
+            <span class="text-slate-400 block font-sans">總機台數 / 在線</span>
+            <span class="text-base font-bold text-white">{{ currentFabData.toolCount }} 台</span>
+            <span class="text-[10px] text-emerald-400 ml-1">({{ currentFabData.onlinePercent }}% 稼動)</span>
+          </div>
+
+          <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800">
+            <span class="text-slate-400 block font-sans">全廠 OEE 稼動率</span>
+            <span class="text-base font-bold text-cyan-400">{{ currentFabData.oee }}%</span>
+            <span class="text-[10px] text-slate-500 ml-1">目標 &gt; 85%</span>
+          </div>
+
+          <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800">
+            <span class="text-slate-400 block font-sans">平均修復時間 MTTR</span>
+            <span class="text-base font-bold text-emerald-400">{{ currentFabData.mttr }} 小時</span>
+            <span class="text-[10px] text-emerald-400 ml-1">(-36.5% 優化)</span>
+          </div>
+
+          <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800">
+            <span class="text-slate-400 block font-sans">新人獨立值班比例</span>
+            <span class="text-base font-bold text-amber-400">{{ currentFabData.juniorRatio }}%</span>
+            <span class="text-[10px] text-slate-400 ml-1">(知識協作支援中)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 機台工作狀態切換按鈕群 (Machine State Switcher) ================= -->
+      <div class="bg-fab-card rounded-2xl border border-fab-border p-4 shadow-lg space-y-2">
+        <div class="flex items-center justify-between text-xs pb-2 border-b border-slate-800">
+          <span class="font-bold text-slate-200">機台工作狀態切換（點擊切換當前異常與對應排解策略）：</span>
+          <span class="text-slate-400 font-mono">目前目標機台: <strong class="text-cyan-300">ETCH-03 Chamber A</strong></span>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
+          <!-- 狀態 1: 報警停機 -->
+          <button @click="setMachineState('alarm')"
+            :class="machineState === 'alarm' ? 'bg-red-600 text-white font-bold ring-2 ring-red-400 shadow-lg shadow-red-600/30' : 'bg-slate-900 text-slate-300 border border-slate-800 hover:border-red-500/50'"
+            class="p-2.5 rounded-xl transition flex items-center justify-center space-x-1.5">
+            <span class="w-2 h-2 rounded-full" :class="machineState === 'alarm' ? 'bg-white animate-ping' : 'bg-red-500'"></span>
+            <span>🔴 報警停機 (ALARM)</span>
+          </button>
+
+          <!-- 狀態 2: 早期偏移預警 -->
+          <button @click="setMachineState('warning')"
+            :class="machineState === 'warning' ? 'bg-amber-600 text-white font-bold ring-2 ring-amber-400 shadow-lg shadow-amber-600/30' : 'bg-slate-900 text-slate-300 border border-slate-800 hover:border-amber-500/50'"
+            class="p-2.5 rounded-xl transition flex items-center justify-center space-x-1.5">
+            <span class="w-2 h-2 rounded-full" :class="machineState === 'warning' ? 'bg-white animate-pulse' : 'bg-amber-400'"></span>
+            <span>🟠 偏離黃金曲線 (WARNING)</span>
+          </button>
+
+          <!-- 狀態 3: 預防保養 -->
+          <button @click="setMachineState('pm')"
+            :class="machineState === 'pm' ? 'bg-purple-600 text-white font-bold ring-2 ring-purple-400 shadow-lg shadow-purple-600/30' : 'bg-slate-900 text-slate-300 border border-slate-800 hover:border-purple-500/50'"
+            class="p-2.5 rounded-xl transition flex items-center justify-center space-x-1.5">
+            <span class="w-2 h-2 rounded-full" :class="machineState === 'pm' ? 'bg-white' : 'bg-purple-400'"></span>
+            <span>🟡 預防保養中 (PM)</span>
+          </button>
+
+          <!-- 狀態 4: 正常生產 -->
+          <button @click="setMachineState('running')"
+            :class="machineState === 'running' ? 'bg-emerald-600 text-white font-bold ring-2 ring-emerald-400 shadow-lg shadow-emerald-600/30' : 'bg-slate-900 text-slate-300 border border-slate-800 hover:border-emerald-500/50'"
+            class="p-2.5 rounded-xl transition flex items-center justify-center space-x-1.5">
+            <span class="w-2 h-2 rounded-full" :class="machineState === 'running' ? 'bg-white animate-pulse' : 'bg-emerald-400'"></span>
+            <span>🟢 正常量產中 (RUNNING)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ================= 核心工作流：四步直覺解決卡 (連動當前工作狀態) ================= -->
       
-      <!-- 步驟 1: 發生了什麼？（8 秒聚合一眼看懂根因） -->
-      <div class="bg-fab-card rounded-2xl border-2 border-red-500/80 p-5 pulse-danger shadow-2xl relative overflow-hidden">
+      <!-- 步驟 1: 發生了什麼？（當前狀態問題判定） -->
+      <div :class="stateCardStyle.border" class="bg-fab-card rounded-2xl border-2 p-5 shadow-2xl relative overflow-hidden transition-all duration-300">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
           <div class="flex items-center space-x-2.5">
-            <span class="w-3 h-3 rounded-full bg-red-500 animate-ping"></span>
-            <span class="px-2 py-0.5 rounded bg-red-600 text-white font-extrabold text-xs">第 1 步：問題判定</span>
+            <span class="w-3 h-3 rounded-full animate-ping" :class="stateCardStyle.badgeBg"></span>
+            <span class="px-2 py-0.5 rounded text-white font-extrabold text-xs" :class="stateCardStyle.badgeBg">第 1 步：現況與根因判定</span>
             <span class="text-sm font-bold text-white">機台: <span class="text-cyan-400 font-mono">ETCH-03 (Chamber A)</span></span>
             <span class="text-xs text-slate-400 font-mono">| 製程: Step 104 Main Etch</span>
           </div>
 
-          <!-- 情境切換器 -->
-          <div class="flex items-center space-x-2 text-xs">
-            <span class="text-slate-400">切換異常情境:</span>
-            <select v-model="selectedScenarioKey" @change="onScenarioChange" class="bg-slate-900 border border-slate-700 text-cyan-300 rounded px-2.5 py-1 font-medium focus:outline-none">
-              <option value="rf">情境 A: 射頻阻抗匹配失諧 (RF Matcher)</option>
-              <option value="pump">情境 B: 真空幫浦軸承磨損 (Dry Pump)</option>
-              <option value="he">情境 C: 靜電吸盤氦氣微漏 (He Backside)</option>
-            </select>
-          </div>
+          <span class="text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-slate-900 text-cyan-300 border border-slate-700">
+            目前狀態: {{ currentStateData.badgeText }}
+          </span>
         </div>
 
         <!-- 根因解析：白話文大字體 -->
         <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
           <div class="md:col-span-2 space-y-1.5">
-            <div class="text-xs text-red-400 font-bold uppercase tracking-wider">🎯 8 秒滑動視窗聚合結果（首發根本原因）：</div>
+            <div class="text-xs font-bold uppercase tracking-wider" :class="stateCardStyle.textAccent">
+              {{ currentStateData.sectionTitle }}
+            </div>
             <div class="text-lg sm:text-xl font-extrabold text-white">
-              {{ currentScenario.title }}
+              {{ currentStateData.headline }}
             </div>
             <p class="text-sm text-slate-300 leading-relaxed pt-1">
-              {{ currentScenario.explain }}
+              {{ currentStateData.description }}
             </p>
           </div>
 
-          <!-- 風暴過濾成效膠囊 -->
+          <!-- 側邊指標膠囊 -->
           <div class="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800 text-xs space-y-1.5 font-mono">
             <div class="flex justify-between items-center text-slate-400">
-              <span>原始進線報警:</span>
-              <span class="text-red-400 font-bold">24 筆連鎖突波</span>
+              <span>產線連鎖效應:</span>
+              <span class="font-bold" :class="stateCardStyle.textAccent">{{ currentStateData.chainStatus }}</span>
             </div>
             <div class="flex justify-between items-center text-slate-400">
-              <span>8秒視窗壓縮比:</span>
-              <span class="text-emerald-400 font-bold font-mono">89.2% (已抑制 23 筆)</span>
+              <span>處理優先級別:</span>
+              <span class="text-white font-bold">{{ currentStateData.priority }}</span>
             </div>
             <div class="text-[11px] text-cyan-400 pt-1 border-t border-slate-800">
-              ✔ 杜絕警報風暴，現場工程師無需逐筆確認伴生警告
+              {{ currentStateData.tip }}
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 步驟 2: 現在該怎麼修？（受限動作空間：綁定原廠手冊與料號） -->
+      <!-- 步驟 2: 現在該怎麼修？（對應排解處置） -->
       <div class="bg-fab-card rounded-2xl border border-fab-border p-5 shadow-xl">
         <div class="flex items-center justify-between pb-3 border-b border-slate-800">
           <div class="flex items-center space-x-2.5">
             <span class="px-2 py-0.5 rounded bg-cyan-600 text-white font-extrabold text-xs">第 2 步：精準排解處置</span>
-            <span class="text-sm font-bold text-white">原廠 SOP 綁定對策 (依事實加權最高排序)</span>
+            <span class="text-sm font-bold text-white">{{ currentStateData.actionCategory }}</span>
           </div>
           <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/30 font-mono font-bold">
-            歷史驗證信心度 {{ currentScenario.primaryAction.confidence }}%
+            歷史驗證信心度 {{ currentStateData.primaryAction.confidence }}%
           </span>
         </div>
 
@@ -180,57 +258,57 @@
           <div class="md:col-span-3 space-y-3">
             <div class="text-base font-extrabold text-white flex items-center gap-2">
               <span class="w-6 h-6 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-500/40 flex items-center justify-center text-xs">1</span>
-              <span>{{ currentScenario.primaryAction.actionName }}</span>
+              <span>{{ currentStateData.primaryAction.actionName }}</span>
             </div>
             <p class="text-sm text-slate-300 leading-relaxed pl-8">
-              {{ currentScenario.primaryAction.description }}
+              {{ currentStateData.primaryAction.description }}
             </p>
 
             <!-- 料號與手冊綁定資訊 (極簡標籤化) -->
             <div class="pl-8 flex flex-wrap gap-2 text-xs font-mono pt-1">
               <div class="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-cyan-300">
-                📖 原廠規範: <strong>{{ currentScenario.primaryAction.sop }}</strong>
+                📖 規範手冊: <strong>{{ currentStateData.primaryAction.sop }}</strong>
               </div>
               <div class="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-emerald-300">
-                📦 領料換件料號: <strong>{{ currentScenario.primaryAction.partNo }}</strong>
+                📦 領料料號: <strong>{{ currentStateData.primaryAction.partNo }}</strong>
               </div>
               <div class="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-amber-300">
-                📍 備品倉位: <strong>FAB-WH-BIN-402</strong> (庫存: 3 件)
+                📍 備品倉位: <strong>{{ currentStateData.primaryAction.bin }}</strong> (庫存: {{ currentStateData.primaryAction.stock }})
               </div>
             </div>
           </div>
 
           <!-- 替代方案快速切換 -->
           <div class="bg-slate-900/80 rounded-xl p-3 border border-slate-800 text-xs space-y-2">
-            <span class="text-slate-400 font-bold block">備用次級處置：</span>
+            <span class="text-slate-400 font-bold block">備用對策方案：</span>
             <div class="p-2 rounded bg-slate-950 border border-slate-800 text-slate-300 cursor-pointer hover:border-cyan-500/40 transition">
-              <div class="font-bold text-slate-200">處置 2: 節流閥擺角校驗</div>
-              <div class="text-[11px] text-slate-400 mt-0.5">信心度 82% | EAP 參數調校</div>
+              <div class="font-bold text-slate-200">{{ currentStateData.secondaryAction.name }}</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">{{ currentStateData.secondaryAction.desc }}</div>
             </div>
             <div class="p-2 rounded bg-slate-950 border border-slate-800 text-slate-400 cursor-pointer hover:border-cyan-500/40 transition">
-              <div class="font-bold">處置 3: 濕式擦拭保養 (降權)</div>
-              <div class="text-[11px] mt-0.5">信心度 45% | 需主管簽核</div>
+              <div class="font-bold">{{ currentStateData.tertiaryAction.name }}</div>
+              <div class="text-[11px] mt-0.5">{{ currentStateData.tertiaryAction.desc }}</div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 步驟 3: 現在能不能動手拆裝？（硬體安全互鎖 Interlock 防呆檢核） -->
+      <!-- 步驟 3: 現在能不能動手拆裝？（硬體安全互鎖 Interlock） -->
       <div class="bg-fab-card rounded-2xl border border-fab-border p-5 shadow-xl">
         <div class="flex items-center justify-between pb-3 border-b border-slate-800">
           <div class="flex items-center space-x-2.5">
             <span class="px-2 py-0.5 rounded bg-amber-600 text-white font-extrabold text-xs">第 3 步：硬體安全互鎖 (Interlock)</span>
-            <span class="text-sm font-bold text-white">拆卸更換前的硬體安全防呆檢核</span>
+            <span class="text-sm font-bold text-white">當前機台硬體安全檢核</span>
           </div>
 
           <!-- 總結判定燈號 -->
-          <span v-if="allInterlocksSafe" class="px-3 py-1 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/50 text-xs font-bold flex items-center space-x-1.5">
+          <span v-if="currentStateData.interlocks.allPassed" class="px-3 py-1 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/50 text-xs font-bold flex items-center space-x-1.5">
             <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span>🟢 全部條件合格，允許開蓋維修</span>
+            <span>🟢 全部條件合格，允許作業</span>
           </span>
-          <span v-else class="px-3 py-1 rounded-full bg-red-950 text-red-400 border border-red-500/50 text-xs font-bold flex items-center space-x-1.5 animate-pulse">
-            <span class="w-2 h-2 rounded-full bg-red-400"></span>
-            <span>🔴 警告：互鎖未達成，禁止動手！</span>
+          <span v-else class="px-3 py-1 rounded-full bg-amber-950 text-amber-400 border border-amber-500/50 text-xs font-bold flex items-center space-x-1.5">
+            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span>🟡 提醒：{{ currentStateData.interlocks.notice }}</span>
           </span>
         </div>
 
@@ -238,59 +316,59 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-4">
           
           <!-- 條件 1: RF 斷電 -->
-          <div :class="interlocks.rf ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-red-500/50 bg-red-950/20'"
+          <div :class="currentStateData.interlocks.rf ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-red-500/50 bg-red-950/20'"
             class="p-3.5 rounded-xl border flex items-center space-x-3 transition">
             <div class="text-3xl">⚡</div>
             <div class="flex-1">
               <div class="flex justify-between items-center">
                 <span class="font-bold text-sm text-white">RF 射頻主電源</span>
-                <span :class="interlocks.rf ? 'text-emerald-400' : 'text-red-400 font-bold'" class="text-xs font-mono">
-                  {{ interlocks.rf ? '0 W (已斷電)' : 'HOT' }}
+                <span :class="currentStateData.interlocks.rf ? 'text-emerald-400' : 'text-red-400 font-bold'" class="text-xs font-mono">
+                  {{ currentStateData.interlocks.rf ? '0 W (已開路斷電)' : '1850 W (發電中)' }}
                 </span>
               </div>
-              <p class="text-xs text-slate-400 mt-0.5">硬體開關已強制開路斷電</p>
+              <p class="text-xs text-slate-400 mt-0.5">{{ currentStateData.interlocks.rf ? '硬體開關已隔離' : '機台正處於帶電運作' }}</p>
             </div>
           </div>
 
-          <!-- 條件 2: 真空釋放/安全抽氣 -->
-          <div :class="interlocks.vacuum ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-red-500/50 bg-red-950/20'"
+          <!-- 條件 2: 真空狀態 -->
+          <div :class="currentStateData.interlocks.vacuum ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-amber-500/50 bg-amber-950/20'"
             class="p-3.5 rounded-xl border flex items-center space-x-3 transition">
             <div class="text-3xl">🌪️</div>
             <div class="flex-1">
               <div class="flex justify-between items-center">
-                <span class="font-bold text-sm text-white">反應腔真空狀態</span>
-                <span :class="interlocks.vacuum ? 'text-emerald-400' : 'text-red-400 font-bold'" class="text-xs font-mono">
-                  0.024 mTorr
+                <span class="font-bold text-sm text-white">反應腔真空度</span>
+                <span :class="currentStateData.interlocks.vacuum ? 'text-emerald-400' : 'text-amber-400 font-bold'" class="text-xs font-mono">
+                  {{ currentStateData.interlocks.vacuumVal }}
                 </span>
               </div>
-              <p class="text-xs text-slate-400 mt-0.5">基準抽真空安全規格 &lt; 0.05</p>
+              <p class="text-xs text-slate-400 mt-0.5">{{ currentStateData.interlocks.vacuumDesc }}</p>
             </div>
           </div>
 
-          <!-- 條件 3: 溫度冷卻 -->
-          <div :class="interlocks.temp ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-red-500/50 bg-red-950/20'"
+          <!-- 條件 3: 溫度狀態 -->
+          <div :class="currentStateData.interlocks.temp ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-amber-500/50 bg-amber-950/20'"
             class="p-3.5 rounded-xl border flex items-center space-x-3 transition">
             <div class="text-3xl">🌡️</div>
             <div class="flex-1">
               <div class="flex justify-between items-center">
                 <span class="font-bold text-sm text-white">腔體接觸溫度</span>
-                <span :class="interlocks.temp ? 'text-emerald-400' : 'text-amber-400 font-bold'" class="text-xs font-mono">
-                  65.2 °C (安全)
+                <span :class="currentStateData.interlocks.temp ? 'text-emerald-400' : 'text-amber-400 font-bold'" class="text-xs font-mono">
+                  {{ currentStateData.interlocks.tempVal }}
                 </span>
               </div>
-              <p class="text-xs text-slate-400 mt-0.5">戴手套安全觸控門檻 &lt; 70°C</p>
+              <p class="text-xs text-slate-400 mt-0.5">{{ currentStateData.interlocks.tempDesc }}</p>
             </div>
           </div>
 
         </div>
       </div>
 
-      <!-- 步驟 4: 維修完成！15 秒快速結案與交班（自動生成 8D 報告） -->
+      <!-- 步驟 4: 維修完成！15 秒快速結案與交班 -->
       <div class="bg-gradient-to-r from-emerald-950/40 via-fab-card to-cyan-950/30 rounded-2xl border border-emerald-500/40 p-5 shadow-xl">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
           <div class="flex items-center space-x-2.5">
             <span class="px-2 py-0.5 rounded bg-emerald-600 text-white font-extrabold text-xs">第 4 步：15 秒極速閉環</span>
-            <span class="text-sm font-bold text-white">修復確認 ➔ 自動交班 ➔ 圖譜權重動態調升</span>
+            <span class="text-sm font-bold text-white">作業確認 ➔ 自動交班 ➔ 知識圖譜動態調權</span>
           </div>
           <div class="text-xs text-slate-400 font-mono">
             目標耗時: <strong class="text-emerald-400">&lt; 15 秒</strong> | 實測平均: 11.4 秒
@@ -302,13 +380,13 @@
           <div class="sm:col-span-2 space-y-2">
             <div class="text-xs text-slate-300 font-medium">抗噪台式術語語音 / 快捷口述補充:</div>
             <div class="flex flex-wrap gap-1.5">
-              <button v-for="(txt, idx) in quickSpeechSnippets" :key="idx" 
+              <button v-for="(txt, idx) in currentStateData.snippets" :key="idx" 
                 @click="applySnippet(txt)"
                 class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded border border-slate-700 text-xs">
                 "{{ txt }}"
               </button>
             </div>
-            <input type="text" v-model="engineerNote" placeholder="點擊上方快捷術語，或輸入維修補充（如：已更換閥件，反向功率 0W）..."
+            <input type="text" v-model="engineerNote" placeholder="點擊上方快捷術語，或輸入維修補充備註..."
               class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-cyan-300 focus:outline-none focus:border-cyan-400">
           </div>
 
@@ -317,10 +395,10 @@
             <button @click="completeResolution" :disabled="isCompleting"
               class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-emerald-600/30 flex items-center justify-center space-x-2 transition">
               <span>✅</span>
-              <span>{{ isCompleting ? '正在生成 8D 結案交班...' : '已更換完畢，恢復稼動 (一鍵結案)' }}</span>
+              <span>{{ isCompleting ? '正在生成 8D 交班報告...' : currentStateData.completeBtnText }}</span>
             </button>
             <div class="text-[11px] text-center text-slate-400">
-              按下一鍵同步更新圖譜權重並恢復機台稼動率
+              按下一鍵同步更新圖譜權重並記錄交班履歷
             </div>
           </div>
         </div>
@@ -328,7 +406,7 @@
         <!-- 結案報告彈出卡片 -->
         <div v-if="closureSummary" class="mt-4 p-4 bg-slate-950 rounded-xl border border-emerald-500/40 space-y-2 text-xs">
           <div class="flex items-center justify-between text-emerald-400 font-bold">
-            <span>🎉 異常已排除！8D 結案交班報告已自動生成：</span>
+            <span>🎉 8D 交班改善報告已自動生成：</span>
             <div class="flex space-x-2">
               <button @click="copy8D" class="px-2.5 py-1 bg-slate-800 text-slate-200 rounded hover:bg-slate-700 transition">
                 {{ copyState ? '已複製！' : '📋 複製 8D 報告' }}
@@ -338,16 +416,16 @@
               </button>
             </div>
           </div>
-          <p class="text-slate-300 font-mono leading-relaxed bg-slate-900/60 p-2.5 rounded border border-slate-800">
+          <p class="text-slate-300 font-mono leading-relaxed bg-slate-900/60 p-2.5 rounded border border-slate-800 whitespace-pre-line">
             {{ closureSummary }}
           </p>
         </div>
       </div>
 
-      <!-- ================= 全新：多樣化細節診斷中心 (4 大主題切換，豐富但不雜亂) ================= -->
+      <!-- ================= 多樣化細節診斷中心 (4 大主題切換) ================= -->
       <div class="bg-fab-card rounded-2xl border border-fab-border p-5 shadow-xl space-y-4">
         
-        <!-- 頂部切換頁籤 (Segmented Controls) -->
+        <!-- 頂部切換頁籤 -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-3">
           <div>
             <h3 class="text-sm font-bold text-white flex items-center space-x-2">
@@ -368,7 +446,7 @@
           </div>
         </div>
 
-        <!-- 面板 1: 感測時序秒級分解 (Timeline Breakdown) -->
+        <!-- 面板 1: 感測時序秒級分解 -->
         <div v-if="activeDetailPanel === 'timeline'" class="space-y-3">
           <div class="text-xs text-slate-300">
             <span class="text-cyan-400 font-bold">主刻蝕 10 秒即時秒級感測分解：</span> 精準標定連鎖反應是在第幾秒從哪一個物理量開始發散
@@ -387,7 +465,6 @@
               <p class="text-slate-400 text-[11px] font-sans">電漿順利引燃，偏壓建立正常</p>
             </div>
 
-            <!-- 關鍵異常突波起點 -->
             <div class="p-3 bg-red-950/60 rounded-xl border-2 border-red-500/80 space-y-1 relative">
               <span class="absolute -top-2 -right-1 px-1.5 py-0.2 rounded bg-red-600 text-white text-[9px] font-bold">失諧起源</span>
               <div class="text-red-300 text-[10px]">T+4.8s (異常突波)</div>
@@ -407,23 +484,18 @@
               <p class="text-slate-400 text-[11px] font-sans">節流閥角度極限，引發壓力警報</p>
             </div>
           </div>
-
-          <div class="p-2.5 bg-slate-900 rounded-lg border border-slate-800 text-[11px] text-slate-400">
-            💡 <strong>工程結論：</strong> T+5.5s 與 T+6.2s 的警報均為 T+4.8s Matcher 電容失諧導致的伴生現象，現場工程師只需更換 Matcher 電容即可一次性解決整串連鎖報警。
-          </div>
         </div>
 
-        <!-- 面板 2: 次系統健康度與零組件壽命 (Subsystem & Consumables Life) -->
+        <!-- 面板 2: 次系統健康度與零組件壽命 -->
         <div v-if="activeDetailPanel === 'health'" class="space-y-4">
           <div class="text-xs text-slate-300">
             <span class="text-cyan-400 font-bold">機台各關鍵零組件剩餘壽命預測：</span> 協助工程師判斷是否為耗材已達壽命極限所引發之劣化
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs font-mono">
-            <!-- 零件 1: RF Matcher 電容 (告急) -->
             <div class="p-3 rounded-xl bg-red-950/30 border border-red-500/40 space-y-2">
               <div class="flex justify-between items-center">
-                <span class="font-bold text-white font-sans">1. RF Matcher 真空可變電容 (已達更換極限)</span>
+                <span class="font-bold text-white font-sans">1. RF Matcher 真空可變電容</span>
                 <span class="text-red-400 font-bold">壽命剩餘 6% (耗盡)</span>
               </div>
               <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
@@ -435,7 +507,6 @@
               </div>
             </div>
 
-            <!-- 零件 2: 真空乾式幫浦 (正常) -->
             <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
               <div class="flex justify-between items-center">
                 <span class="font-bold text-white font-sans">2. 乾式真空幫浦 (Pfeiffer Dry Pump)</span>
@@ -450,7 +521,6 @@
               </div>
             </div>
 
-            <!-- 零件 3: 腔體密封 O-ring (注意) -->
             <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
               <div class="flex justify-between items-center">
                 <span class="font-bold text-white font-sans">3. 反應腔門密封 O-Ring</span>
@@ -465,10 +535,9 @@
               </div>
             </div>
 
-            <!-- 零件 4: 靜電吸盤表面陶瓷 (優良) -->
             <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
               <div class="flex justify-between items-center">
-                <span class="font-bold text-white font-sans">4. 靜電吸盤 (ESC) 表面陶瓷鍍層</span>
+                <span class="font-bold text-white font-sans">4. 靜電吸盤表面陶瓷鍍層</span>
                 <span class="text-emerald-400 font-bold">壽命剩餘 85% (優良)</span>
               </div>
               <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
@@ -482,14 +551,13 @@
           </div>
         </div>
 
-        <!-- 面板 3: 歷史真實相似案例實證 (Historical Case Evidence) -->
+        <!-- 面板 3: 歷史真實相似案例實證 -->
         <div v-if="activeDetailPanel === 'cases'" class="space-y-3">
           <div class="text-xs text-slate-300">
-            <span class="text-cyan-400 font-bold">近三年同型號機台已驗證歷史排解案例：</span> 以前別人是怎麼修好的？稼動維持了多久？
+            <span class="text-cyan-400 font-bold">同型號機台已驗證歷史排解案例：</span> 以前別人是怎麼修好的？稼動維持了多久？
           </div>
 
           <div class="space-y-2 text-xs font-mono">
-            <!-- 案例 1 -->
             <div class="p-3 rounded-xl bg-slate-950 border border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <div class="flex items-center space-x-2">
@@ -505,7 +573,6 @@
               </div>
             </div>
 
-            <!-- 案例 2 -->
             <div class="p-3 rounded-xl bg-slate-950 border border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <div class="flex items-center space-x-2">
@@ -513,49 +580,33 @@
                   <span class="font-bold text-white font-sans">1 個月前 (日本熊本 JASM ETCH-03)</span>
                 </div>
                 <p class="text-slate-300 mt-1 font-sans text-[11px]">
-                  處置: 僅微調 Matcher 偏壓角度而未更換電容。<strong>僅維持 48 小時即再度失諧報警</strong> (證明微調治標不治本，必須實體換件)。
+                  處置: 僅微調 Matcher 偏壓角度而未換件。<strong>維持 48 小時即再度失諧報警</strong> (證明必須實體換件)。
                 </p>
               </div>
               <div class="text-right whitespace-nowrap">
                 <span class="text-amber-400 font-bold font-sans">⚠️ 治標短暫</span>
               </div>
             </div>
-
-            <!-- 案例 3 -->
-            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <div class="flex items-center space-x-2">
-                  <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[11px]">相似度 72%</span>
-                  <span class="font-bold text-white font-sans">4 個月前 (南科 Fab 18 ETCH-02)</span>
-                </div>
-                <p class="text-slate-300 mt-1 font-sans text-[11px]">
-                  處置: 接觸點酒精擦拭清潔。維持約 110 小時後阻抗飄移。
-                </p>
-              </div>
-              <div class="text-right whitespace-nowrap">
-                <span class="text-slate-400 font-sans">次選方案</span>
-              </div>
-            </div>
           </div>
         </div>
 
-        <!-- 面板 4: Copy Exactly 跨廠指標對齊 (Cross-Fab Comparison) -->
+        <!-- 面板 4: Copy Exactly 跨廠指標對齊 -->
         <div v-if="activeDetailPanel === 'crossfab'" class="space-y-4">
           <div class="text-xs text-slate-300">
-            <span class="text-cyan-400 font-bold">台灣竹科母廠 (Golden Tool) vs 目前海外廠關鍵物理量對比：</span> 清楚指出海外機台落差
+            <span class="text-cyan-400 font-bold">{{ currentFabData.name }} 與母廠 Golden Tool 關鍵物理量對比：</span>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
             <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
               <span class="text-slate-400 font-sans">射頻反射功率偏差:</span>
               <div class="text-lg font-bold text-red-400">+14.2% (偏高)</div>
-              <div class="text-[11px] text-slate-500">母廠基準: 2.1W | 海外廠: 14.8W</div>
+              <div class="text-[11px] text-slate-500">母廠基準: 2.1W | 當前廠區: 14.8W</div>
             </div>
 
             <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
               <span class="text-slate-400 font-sans">腔體壓力穩定耗時:</span>
               <div class="text-lg font-bold text-amber-400">1.8s (延遲 0.6s)</div>
-              <div class="text-[11px] text-slate-500">母廠基準: 1.2s | 海外廠: 1.8s</div>
+              <div class="text-[11px] text-slate-500">母廠基準: 1.2s | 當前廠區: 1.8s</div>
             </div>
 
             <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
@@ -565,10 +616,9 @@
             </div>
           </div>
 
-          <!-- 波形圖表 (僅在此分頁載入，不干擾主畫面) -->
           <div class="p-3 bg-slate-950 rounded-xl border border-slate-800">
             <div class="text-xs text-slate-400 mb-2 font-mono flex justify-between">
-              <span>感測曲線對齊 (Step 104 Main Etch)</span>
+              <span>關鍵感測曲線 (Step 104 Main Etch)</span>
               <span class="text-amber-400">早期偏移 +3.4%</span>
             </div>
             <div class="h-44 w-full">
@@ -599,11 +649,244 @@
       setup() {
         const cleanroomMode = ref(false);
         const soundEnabled = ref(false);
-        const currentFab = ref('Hsinchu_Fab12B');
         const isCompleting = ref(false);
         const copyState = ref(false);
         const closureSummary = ref('');
         const engineerNote = ref('');
+
+        // 廠區真實數據庫 (四廠真實規格對齊)
+        const fabsData = {
+          Hsinchu_Fab12B: {
+            name: '台灣竹科 Fab 12B (R&D 母廠)',
+            node: 'N2 / N3E 先進製程研發',
+            toolCount: 128,
+            onlinePercent: 98.4,
+            oee: 94.8,
+            mttr: 2.1,
+            juniorRatio: 18,
+            recipeShield: false
+          },
+          Tainan_Fab18: {
+            name: '台灣南科 Fab 18 (量產超大型晶圓廠 GigaFab)',
+            node: 'N3 / N4 滿載量產',
+            toolCount: 340,
+            onlinePercent: 96.8,
+            oee: 92.4,
+            mttr: 2.4,
+            juniorRatio: 24,
+            recipeShield: false
+          },
+          Kumamoto_JASM: {
+            name: '日本熊本 JASM (車用晶片新廠)',
+            node: '12/16nm FinFET & 28nm 車用晶片',
+            toolCount: 64,
+            onlinePercent: 89.2,
+            oee: 86.5,
+            mttr: 3.8,
+            juniorRatio: 48,
+            recipeShield: true
+          },
+          Arizona_Fab21: {
+            name: '美國亞利桑那 Fab 21 (先進新廠良率爬坡)',
+            node: 'N4 先進製程良率爬坡 (Ramp-up)',
+            toolCount: 82,
+            onlinePercent: 84.6,
+            oee: 81.2,
+            mttr: 4.2,
+            juniorRatio: 54,
+            recipeShield: true
+          }
+        };
+
+        const currentFabKey = ref('Hsinchu_Fab12B');
+        const currentFabData = computed(() => fabsData[currentFabKey.value]);
+
+        const onFabChange = () => {
+          playBeep(650, 0.08);
+          closureSummary.value = '';
+          if (activeDetailPanel.value === 'crossfab') {
+            setTimeout(renderDetailWaveform, 200);
+          }
+        };
+
+        // 機台工作狀態切換 (4 大狀態對應不同排解方案)
+        const machineState = ref('alarm');
+
+        const stateDatabase = {
+          alarm: {
+            badgeText: '🔴 報警停機中 (DOWN / ALARM)',
+            sectionTitle: '🎯 8 秒滑動視窗聚合結果（首發根本原因）：',
+            headline: '[ALARM-7721] 射頻匹配箱電容失諧擊穿 (RF Matcher Phase Mismatch)',
+            description: '主刻蝕阻抗失諧，引發反射功率突波。已自動抑制連鎖引發之腔壓漂移與電漿熄滅（壓縮比 89.2%）。',
+            chainStatus: '已壓制 23 筆伴生警報',
+            priority: 'P1 - 緊急急修 (立即換件)',
+            tip: '✔ 杜絕警報風暴，現場工程師無需逐筆確認伴生警告',
+            actionCategory: '原廠 SOP 綁定處置 (急修換件)',
+            primaryAction: {
+              actionName: '更換 RF Matcher 匹配箱電容組件，並執行回歸零點校準',
+              confidence: 96,
+              sop: 'Lam Kiyo SOP Sec 4.3 Rev D',
+              partNo: 'EAM-4402-RF-MATCH-C45',
+              bin: 'FAB-WH-BIN-402',
+              stock: '3 件',
+              description: '更換已損耗之真空可變電容，確認接點無碳化，以測試模式 50W 檢驗反向功率降至 0W。'
+            },
+            secondaryAction: { name: '處置 2: 節流閥擺角校驗', desc: '信心度 82% | EAP 參數調校' },
+            tertiaryAction: { name: '處置 3: 濕式擦拭保養 (降權)', desc: '信心度 45% | 需主管簽核' },
+            interlocks: {
+              allPassed: true,
+              rf: true,
+              vacuum: true,
+              temp: true,
+              vacuumVal: '0.024 mTorr (抽氣達標)',
+              vacuumDesc: '基準抽真空安全規格 < 0.05',
+              tempVal: '65.2 °C (安全)',
+              tempDesc: '戴手套安全觸控門檻 < 70°C',
+              notice: ''
+            },
+            snippets: [
+              '更換 Matcher 電容並重測阻抗，反向功率 0W，正常。',
+              '抽真空速度正常，O-ring 已清潔潤滑。',
+              '節流閥角度校準完成，壓力響應正常。'
+            ],
+            completeBtnText: '已更換完畢，恢復稼動 (一鍵結案)'
+          },
+          warning: {
+            badgeText: '🟠 偏離黃金曲線 (WARNING / DRIFT)',
+            sectionTitle: '📈 Copy Exactly 即時偏移預警 (未達 SECS 報警前)：',
+            headline: '[DRIFT-04] RF 反射功率偏離黃金基準帶 +3.4% (Step 104 Main Etch)',
+            description: '比對台灣母廠 Golden Tool 基準，發現反向功率存在早期飄移，預計在 4 批次後可能引發刻蝕深寬比異常。',
+            chainStatus: '無連鎖報警 (未達門檻)',
+            priority: 'P3 - 預防性微調 (無需停機)',
+            tip: '✔ 提早預警，防範潛在晶圓報廢風險',
+            actionCategory: 'APC 製程自動進階控制微調對策',
+            primaryAction: {
+              actionName: '執行 APC 偏壓自動微調補償 +1.2V，並重校 MFC 氣體配比',
+              confidence: 91,
+              sop: 'Process APC Manual Sec 2.1',
+              partNo: 'RECIPE-APC-OFFSET-104',
+              bin: '線上參數庫 (無需實體零件)',
+              stock: '即時套用',
+              description: '透過線上參數動態微調收斂反向功率，讓阻抗回歸黃金曲線容差範圍內，不影響當前批量生產。'
+            },
+            secondaryAction: { name: '對策 2: 安排下一 PM 梯次檢查電容', desc: '提早備料 C45 電容' },
+            tertiaryAction: { name: '對策 3: 晶圓抽樣量測 CD 厚度', desc: '通知品管抽檢' },
+            interlocks: {
+              allPassed: true,
+              rf: false, // 帶電生產中
+              vacuum: true,
+              temp: true,
+              vacuumVal: '12.4 mTorr (製程壓力)',
+              vacuumDesc: '刻蝕氣壓正常範圍',
+              tempVal: '65.0 °C (控溫正常)',
+              tempDesc: 'ESC 晶圓控溫穩定',
+              notice: '機台帶電生產中，僅允許軟體端遠端微調參數，禁止開蓋。'
+            },
+            snippets: [
+              'APC 偏壓補償 +1.2V 已套用，波形回歸 Golden 容差帶。',
+              '抽檢晶圓刻蝕深寬比正常，良率無影響。'
+            ],
+            completeBtnText: '確認參數已收斂，標記預防成功'
+          },
+          pm: {
+            badgeText: '🟡 預防保養中 (MAINTENANCE / PM)',
+            sectionTitle: '🛠️ 定期維護標準作業排程 (Periodic Maintenance)：',
+            headline: '[PM-ETCH-14D] 蝕刻機腔體雙週定期預防保養流程',
+            description: '累積運轉達 340 小時，例行執行反應腔體內部聚合物擦拭、真空密封圈潤滑與感測器零點歸零校正。',
+            chainStatus: '機台已切換至維護旁路',
+            priority: 'P2 - 定期維護排程',
+            tip: '✔ 保持設備健康指數，延長關鍵零組件壽命',
+            actionCategory: '半導體潔淨室標準 PM 流程',
+            primaryAction: {
+              actionName: '執行反應腔內壁擦拭、門圈 O-Ring 更換與氦氣氣密檢測',
+              confidence: 98,
+              sop: 'Cleanroom PM Protocol P-09 Rev C',
+              partNo: 'PM-KIT-ETCH-WIPE-01',
+              bin: 'FAB-WH-BIN-108',
+              stock: '12 套',
+              description: '使用高純度異丙醇 (IPA) 濕式擦拭腔體內壁，塗抹真空潤滑脂，閉門執行氦氣檢漏 (< 0.2 sccm)。'
+            },
+            secondaryAction: { name: '步驟 2: MFC 氣體流量計零點重校', desc: 'Horiba MFC 校驗' },
+            tertiaryAction: { name: '步驟 3: 幫浦抽速基準回測', desc: '記錄抽至 0.01 mTorr 時間' },
+            interlocks: {
+              allPassed: true,
+              rf: true,
+              vacuum: true,
+              temp: true,
+              vacuumVal: '大氣壓力 / 已破真空',
+              vacuumDesc: '腔體已充氮氣安全開啟',
+              tempVal: '28.5 °C (室溫)',
+              tempDesc: '已冷卻完畢，可安全觸摸',
+              notice: ''
+            },
+            snippets: [
+              'PM 濕式擦拭完成，O-Ring 已換新，氦檢合格。',
+              '腔體抽真空測試正常，抽至 Base Vacuum 耗時 2.4 分鐘。'
+            ],
+            completeBtnText: '完成保養，重置運轉計時器並恢復產線'
+          },
+          running: {
+            badgeText: '🟢 正常量產中 (RUNNING / PRODUCTION)',
+            sectionTitle: '⚡ 即時量產稼動監控 (Step ID #104 Main Etch)：',
+            headline: '[LOT-W26-8894] 晶圓批次穩定刻蝕生產中 (目前進度 78%)',
+            description: '全感測器物理量均落在台灣母廠 Golden Tool 黃金帶中心，無任何飄移或連鎖報警，機台狀態極度穩定。',
+            chainStatus: '全製程物理量穩定',
+            priority: 'P4 - 正常監控 (無需介入)',
+            tip: '✔ 機台運作正常，知識圖譜持續背景自主學習',
+            actionCategory: '生產線上狀態追蹤',
+            primaryAction: {
+              actionName: '維持當前配方生產，監控下一站 CMP 研磨派工傳送狀態',
+              confidence: 99,
+              sop: 'Standard Run Card SOP-01',
+              partNo: 'WAFER-LOT-300MM-N3',
+              bin: 'FOUP 晶圓盒 #08',
+              stock: '25 片全滿',
+              description: '批次即將於 12 分鐘後完成主刻蝕，自動由 OHT 天車派送至下一站機台。'
+            },
+            secondaryAction: { name: '監控項目: ESC 吸盤背壓流速', desc: '目前 0.18 sccm (極佳)' },
+            tertiaryAction: { name: '監控項目: 射頻阻抗相角', desc: '目前 0.2° (完全匹配)' },
+            interlocks: {
+              allPassed: false,
+              rf: false, // 正常生產中，帶電中
+              vacuum: true,
+              temp: true,
+              vacuumVal: '12.4 mTorr (工作氣壓)',
+              vacuumDesc: '刻蝕特氣等離子體穩定',
+              tempVal: '65.0 °C (控溫中)',
+              tempDesc: '晶圓吸附恆溫控制中',
+              notice: '正常生產中禁止手動干預。'
+            },
+            snippets: [
+              '本批次生產完成，無任何異常。',
+              'OHT 天車已順利取片傳送至下一站。'
+            ],
+            completeBtnText: '記錄批次正常產出 (寫入歷史實證庫)'
+          }
+        };
+
+        const currentStateData = computed(() => stateDatabase[machineState.value]);
+
+        const setMachineState = (st) => {
+          machineState.value = st;
+          closureSummary.value = '';
+          engineerNote.value = '';
+          playBeep(st === 'alarm' ? 400 : 700, 0.1);
+          if (activeDetailPanel.value === 'crossfab') {
+            setTimeout(renderDetailWaveform, 200);
+          }
+        };
+
+        const stateCardStyle = computed(() => {
+          if (machineState.value === 'alarm') {
+            return { border: 'border-red-500/80 pulse-danger', badgeBg: 'bg-red-600', textAccent: 'text-red-400' };
+          } else if (machineState.value === 'warning') {
+            return { border: 'border-amber-500/80', badgeBg: 'bg-amber-600', textAccent: 'text-amber-400' };
+          } else if (machineState.value === 'pm') {
+            return { border: 'border-purple-500/80', badgeBg: 'bg-purple-600', textAccent: 'text-purple-400' };
+          } else {
+            return { border: 'border-emerald-500/80', badgeBg: 'bg-emerald-600', textAccent: 'text-emerald-400' };
+          }
+        });
 
         // 細節面板清單
         const detailPanels = ref([
@@ -614,76 +897,12 @@
         ]);
         const activeDetailPanel = ref('timeline');
 
-        // 故障情境資料庫
-        const scenarios = {
-          rf: {
-            title: '[ALARM-7721] 射頻匹配箱電容失諧擊穿 (RF Matcher Phase Mismatch)',
-            explain: '製程主刻蝕階段射頻阻抗失諧，引發反射功率突波。其餘「腔體壓力漂移」、「電漿熄滅」、「晶圓溫度超標」均為此失諧引發之附帶連鎖反應，已自動抑制。',
-            primaryAction: {
-              actionName: '更換 RF Matcher 匹配箱電容組件，並執行回歸零點校準',
-              confidence: 96,
-              sop: 'Lam Kiyo SOP Sec 4.3 Rev D',
-              partNo: 'EAM-4402-RF-MATCH-C45',
-              description: '阻抗失諧為主因。更換已損耗之真空可變電容，確認接點無碳化，以測試模式 50W 檢驗反向功率降至 0W。'
-            }
-          },
-          pump: {
-            title: '[ALARM-4102] 乾式真空幫浦抽速衰退與軸承震動 (Dry Pump Vibration)',
-            explain: '乾式真空幫浦抽速驟降，造成反應副產物氣體回流與前級管路壓力積累，其餘連鎖報警均為抽速不足之伴生現象。',
-            primaryAction: {
-              actionName: '更換真空幫浦前級隔離閥 (Foreline Valve) 與軸承潤滑油',
-              confidence: 92,
-              sop: 'Pfeiffer Pump SOP Ch 5',
-              partNo: 'EAM-1108-PUMP-OIL-K3',
-              description: '排查幫浦進氣端壓力，重置前級管路電磁閥，確認排氣背壓在 0.5 Torr 規格以內。'
-            }
-          },
-          he: {
-            title: '[ALARM-5509] 靜電吸盤氦氣背壓洩漏微漏 (He Backside Cooling Leak)',
-            explain: '靜電吸盤晶圓邊緣密封圈微漏，造成氦氣洩入反應腔導致局部電漿失真，其餘均為伴生連鎖警報。',
-            primaryAction: {
-              actionName: '清潔吸盤密封圈表面聚合物沉積，重設吸盤氦氣背壓流量',
-              confidence: 89,
-              sop: 'Chuck SOP Sec 8 He Seal',
-              partNo: 'EAM-9901-SEAL-RING',
-              description: '以無塵布擦拭吸盤邊緣 O-ring，執行晶圓抽真空吸附測試，確認氦氣洩漏率 &lt; 0.5 sccm。'
-            }
-          }
-        };
-
-        const selectedScenarioKey = ref('rf');
-        const currentScenario = computed(() => scenarios[selectedScenarioKey.value]);
-
-        const onScenarioChange = () => {
-          closureSummary.value = '';
-          engineerNote.value = '';
-          playBeep(550, 0.08);
-          if (activeDetailPanel.value === 'crossfab') {
-            setTimeout(renderDetailWaveform, 200);
-          }
-        };
-
         const onDetailTabChange = (panelId) => {
           playBeep(600, 0.05);
           if (panelId === 'crossfab') {
             setTimeout(renderDetailWaveform, 200);
           }
         };
-
-        // 硬體互鎖狀態
-        const interlocks = ref({
-          rf: true,
-          vacuum: true,
-          temp: true
-        });
-        const allInterlocksSafe = computed(() => interlocks.value.rf && interlocks.value.vacuum && interlocks.value.temp);
-
-        // 快捷術語
-        const quickSpeechSnippets = ref([
-          '更換 Matcher 電容並重測阻抗，反向功率 0W，正常。',
-          '抽真空速度正常，O-ring 已清潔潤滑。',
-          '節流閥角度校準完成，壓力響應正常。'
-        ]);
 
         const applySnippet = (txt) => {
           engineerNote.value = txt;
@@ -720,12 +939,13 @@
           setTimeout(() => {
             isCompleting.value = false;
             const extra = engineerNote.value ? `【現場口述補充】: ${engineerNote.value}` : '';
-            closureSummary.value = `[8D 結案交班紀錄 - ${new Date().toLocaleTimeString()}] 
-機台 ETCH-03 Chamber A 異常已排除！
-【處置對策】: 依 ${currentScenario.value.primaryAction.sop} 執行「${currentScenario.value.primaryAction.actionName}」（換件料號: ${currentScenario.value.primaryAction.partNo}）。
-【安全互鎖】: RF/真空/溫度檢核通過。
+            closureSummary.value = `[8D 交班改善紀錄 - ${new Date().toLocaleTimeString()}]
+【廠區】: ${currentFabData.value.name}
+【機台】: ETCH-03 Chamber A (狀態: ${currentStateData.value.badgeText})
+【執行對策】: 依 ${currentStateData.value.primaryAction.sop} 執行「${currentStateData.value.primaryAction.actionName}」（料號: ${currentStateData.value.primaryAction.partNo}）
+【安全驗證】: 硬體互鎖條件已通過合規檢核
 ${extra}
-【效益】: 稼動已恢復，知識圖譜權重已自動調升 +0.12！耗時 11.2 秒完成閉環。`;
+【成效效益】: 稼動狀態確認恢復，知識圖譜成功案例權重已調升 +0.12！`;
             playBeep(1040, 0.2);
           }, 600);
         };
@@ -742,7 +962,7 @@ ${extra}
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `8D_Closure_ETCH-03_${Date.now()}.txt`;
+          a.download = `8D_Report_${currentFabKey.value}_${Date.now()}.txt`;
           a.click();
           URL.revokeObjectURL(url);
         };
@@ -767,9 +987,11 @@ ${extra}
                   tension: 0.3
                 },
                 {
-                  label: '海外廠實測波形 (偏離 +3.4%)',
-                  data: [12.0, 12.2, 12.5, 12.8, 12.9, 13.0, 13.1, 12.9, 12.7, 12.5, 12.3],
-                  borderColor: '#F59E0B',
+                  label: `${currentFabData.value.name} 實測波形`,
+                  data: machineState.value === 'running' 
+                    ? [12.0, 12.1, 12.2, 12.3, 12.4, 12.4, 12.3, 12.3, 12.2, 12.1, 12.0]
+                    : [12.0, 12.2, 12.5, 12.8, 12.9, 13.0, 13.1, 12.9, 12.7, 12.5, 12.3],
+                  borderColor: machineState.value === 'running' ? '#10B981' : '#F59E0B',
                   borderDash: [5, 5],
                   borderWidth: 2,
                   tension: 0.3
@@ -793,13 +1015,13 @@ ${extra}
         return {
           cleanroomMode,
           soundEnabled,
-          currentFab,
-          selectedScenarioKey,
-          currentScenario,
-          onScenarioChange,
-          interlocks,
-          allInterlocksSafe,
-          quickSpeechSnippets,
+          currentFabKey,
+          currentFabData,
+          onFabChange,
+          machineState,
+          setMachineState,
+          currentStateData,
+          stateCardStyle,
           engineerNote,
           applySnippet,
           toggleSound,
