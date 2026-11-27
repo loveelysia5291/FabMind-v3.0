@@ -263,6 +263,90 @@
 
         </div>
 
+        <!-- 機台關鍵耗材與部件磨損健康度監測儀表 (Wear & Consumables Degradation) -->
+        <div class="mt-3 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full" :class="wearStatus.level === 'critical' ? 'bg-red-500 animate-ping' : (wearStatus.level === 'warning' ? 'bg-amber-400' : 'bg-emerald-400')"></span>
+              <span class="font-bold text-white text-xs sm:text-sm">關鍵部件磨損健康度監測 (Tool & Consumable Wear Degradation)</span>
+              <span class="text-[11px] px-2 py-0.5 rounded bg-slate-900 border text-slate-300 font-mono" :class="wearStatus.border">
+                {{ consumableInfo.partName }}
+              </span>
+            </div>
+
+            <!-- 當前磨損狀態指示 -->
+            <div class="flex items-center space-x-2 text-xs font-mono">
+              <span class="text-slate-400">當前狀態:</span>
+              <span class="font-bold" :class="wearStatus.color">{{ wearStatus.text }}</span>
+              <span class="text-slate-500 text-[10px] hidden sm:inline">(上次光學自檢: {{ wearData.lastScanTime }})</span>
+            </div>
+          </div>
+
+          <!-- 磨損進度條與詳細指標 -->
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-center text-xs font-mono">
+            
+            <!-- 磨損百分比條 (佔 2 欄) -->
+            <div class="sm:col-span-2 bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-slate-400">累計磨損程度 (Wear Index)</span>
+                <span class="font-bold text-sm" :class="wearStatus.color">{{ wearData.percentage }}%</span>
+              </div>
+              <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                <div class="h-full transition-all duration-300 rounded-full" :class="wearStatus.barBg" :style="{ width: wearData.percentage + '%' }"></div>
+              </div>
+              <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+                <span>0% (全新狀態)</span>
+                <span class="text-amber-400/80">80% 警戒線</span>
+                <span class="text-red-400/80">100% 報廢極限</span>
+              </div>
+            </div>
+
+            <!-- 物理加工次數指標 -->
+            <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+              <span class="text-slate-400 block font-sans">{{ consumableInfo.metricLabel }}</span>
+              <div class="text-base font-bold text-white mt-0.5">
+                {{ wearData.touchdowns.toLocaleString() }} <span class="text-[10px] text-slate-400">/ {{ wearData.maxTouchdowns.toLocaleString() }} {{ consumableInfo.unit }}</span>
+              </div>
+              <div class="text-[10px] text-slate-500 mt-0.5 truncate">料號: {{ consumableInfo.partCode }}</div>
+            </div>
+
+            <!-- 微米級物理磨耗深度 -->
+            <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+              <span class="text-slate-400 block font-sans">{{ consumableInfo.depthLabel }}</span>
+              <div class="text-base font-bold mt-0.5" :class="wearStatus.color">
+                {{ wearData.scannedMicrons }} <span class="text-xs text-slate-400">μm</span>
+                <span class="text-[10px] text-slate-500 font-normal"> (上限 {{ wearData.maxMicrons }} μm)</span>
+              </div>
+              <div class="text-[10px] text-slate-400 mt-0.5">雷射位移微米量測</div>
+            </div>
+
+          </div>
+
+          <!-- 磨損動態調整實體按鈕群 (遵照使用者要求：動態調整以按鈕操作) -->
+          <div class="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+            
+            <div class="flex items-center space-x-1.5">
+              <span class="text-slate-400 font-bold font-sans">磨損動態模擬按鈕:</span>
+              <button @click="adjustWear(-10)" class="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-cyan-300 rounded border border-slate-700 font-mono font-bold">-10%</button>
+              <button @click="adjustWear(-5)" class="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-cyan-300 rounded border border-slate-700 font-mono font-bold">-5%</button>
+              <button @click="adjustWear(+5)" class="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-amber-300 rounded border border-slate-700 font-mono font-bold">+5%</button>
+              <button @click="adjustWear(+10)" class="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-red-300 rounded border border-slate-700 font-mono font-bold">+10%</button>
+            </div>
+
+            <div class="flex items-center space-x-2">
+              <button @click="runWearScan" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-600 font-bold transition flex items-center space-x-1">
+                <span>🔬</span>
+                <span>光學磨損自檢</span>
+              </button>
+              <button @click="replaceConsumable" class="px-3 py-1 bg-emerald-800 hover:bg-emerald-700 text-emerald-100 rounded-lg border border-emerald-500/50 font-bold shadow transition flex items-center space-x-1">
+                <span>🔄</span>
+                <span>一鍵更換耗材 (重置為0%)</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+
       </div>
 
       <!-- ================= 核心工作流：四步直覺排解與操作卡 ================= -->
@@ -669,6 +753,97 @@
           telemetry.value.reflected = 2; // 阻抗恢復
           playBeep(1040, 0.2);
           alert('🔧 處置已成功在線套用！機台完成回歸零點校準，塔燈恢復綠燈 RUN！');
+        };
+
+        // 機台關鍵耗材與部件磨損程度監測 (Tool & Consumables Degradation)
+        const wearData = ref({
+          percentage: 78.4,
+          scannedMicrons: 15.7,
+          maxMicrons: 20.0,
+          touchdowns: 156800,
+          maxTouchdowns: 200000,
+          lastScanTime: '11:28:40'
+        });
+
+        const consumableInfo = computed(() => {
+          if (currentFabKey.value === 'Chiayi_AP6') {
+            return {
+              partName: 'TCB 陶瓷熱壓吸嘴 (Bonding Head Collet)',
+              partCode: 'CLT-TCB-998-CERAMIC',
+              metricLabel: '熱壓觸合次數 (Touchdown)',
+              unit: '次',
+              depthLabel: '吸嘴平面磨耗 (Coplanarity Tilt)',
+              wearWarningThreshold: 85,
+              recommendAction: '更換吸嘴陶瓷頭並以白光干涉儀重新校準共平面度'
+            };
+          } else if (currentFabKey.value === 'Kaohsiung_ASE') {
+            return {
+              partName: '垂直 MEMS 探針卡微針 (Vertical Probe Needle)',
+              partCode: 'PCB-MEMS-50UM-COWOS',
+              metricLabel: '探針接觸次數 (Touchdown)',
+              unit: '次',
+              depthLabel: '針尖磨耗短縮 (Tip Wear)',
+              wearWarningThreshold: 80,
+              recommendAction: '執行線上拋光沙紙清針 (Cleaning Wafer) 或離線更換針模'
+            };
+          } else if (currentFabKey.value === 'Hsinchu_Fab12B') {
+            return {
+              partName: '浸潤微影密封環 (Immersion Hood Seal Ring)',
+              partCode: 'SEAL-EUV-IMM-402',
+              metricLabel: '晶圓曝光片數 (Wafer Count)',
+              unit: '片',
+              depthLabel: '密封間隙擴張 (Seal Gap)',
+              wearWarningThreshold: 85,
+              recommendAction: '更換氟橡膠密封圈並進行超純水氣液密封負壓測試'
+            };
+          } else {
+            return {
+              partName: '反應腔 SiC 聚焦環 (Plasma Focus Ring)',
+              partCode: 'RING-SIC-ETCH-300',
+              metricLabel: 'RF 電漿擊穿時數 (RF Hours)',
+              unit: '小時',
+              depthLabel: '環體槽深侵蝕 (Erosion Depth)',
+              wearWarningThreshold: 80,
+              recommendAction: '更換全新 SiC Focus Ring 並執行 Chamber O2 Plasma Seasoning'
+            };
+          }
+        });
+
+        const wearStatus = computed(() => {
+          const p = wearData.value.percentage;
+          if (p >= 90) {
+            return { level: 'critical', text: '🔴 嚴重磨耗 (瀕臨極限/報廢風險)', color: 'text-red-400', barBg: 'bg-red-500 animate-pulse', border: 'border-red-500/50' };
+          } else if (p >= 75) {
+            return { level: 'warning', text: '🟡 高度磨耗 (建議排定更換)', color: 'text-amber-400', barBg: 'bg-amber-500', border: 'border-amber-500/50' };
+          } else {
+            return { level: 'healthy', text: '🟢 磨耗健康 (正常生產區間)', color: 'text-emerald-400', barBg: 'bg-emerald-500', border: 'border-emerald-500/50' };
+          }
+        });
+
+        const adjustWear = (delta) => {
+          wearData.value.percentage = Math.min(100, Math.max(0, parseFloat((wearData.value.percentage + delta).toFixed(1))));
+          wearData.value.scannedMicrons = parseFloat((wearData.value.maxMicrons * (wearData.value.percentage / 100)).toFixed(1));
+          wearData.value.touchdowns = Math.round(wearData.value.maxTouchdowns * (wearData.value.percentage / 100));
+          playBeep(500 + delta * 20, 0.05);
+
+          if (wearData.value.percentage >= 90 && machineState.value !== 'alarm') {
+            machineState.value = 'warning';
+          }
+        };
+
+        const replaceConsumable = () => {
+          wearData.value.percentage = 0.0;
+          wearData.value.scannedMicrons = 0.0;
+          wearData.value.touchdowns = 0;
+          playBeep(988, 0.25);
+          alert(`🔄 [耗材更換完成]：已為機台更換全新 ${consumableInfo.value.partName}（料號：${consumableInfo.value.partCode}）！\n磨損度已歸零 (0.0%)，健康度恢復 100%！`);
+        };
+
+        const runWearScan = () => {
+          playBeep(1200, 0.15);
+          const nowStr = new Date().toTimeString().split(' ')[0];
+          wearData.value.lastScanTime = nowStr;
+          alert(`🔬 [光學掃描自檢完成 - ${nowStr}]：\n耗材部件：${consumableInfo.value.partName}\n實測磨耗深度：${wearData.value.scannedMicrons} μm / 許容極限 ${wearData.value.maxMicrons} μm\n磨損百分比：${wearData.value.percentage}%\n健康評估：${wearStatus.value.text}`);
         };
 
         // 前段晶圓製造 vs 後段先進封測領域
@@ -1147,6 +1322,13 @@ ${extra}
               telemetry.value.energyKwh = parseFloat((telemetry.value.energyKwh + 0.0005).toFixed(3));
               telemetry.value.power = Math.round(targetPower.value + (Math.random() * 6 - 3));
               telemetry.value.current = parseFloat((telemetry.value.power / 380.2).toFixed(2));
+
+              // 運轉中耗材微量物理磨耗累進 (+0.01%)
+              if (wearData.value.percentage < 100) {
+                wearData.value.percentage = parseFloat((wearData.value.percentage + 0.01).toFixed(2));
+                wearData.value.scannedMicrons = parseFloat((wearData.value.maxMicrons * (wearData.value.percentage / 100)).toFixed(1));
+                wearData.value.touchdowns += 2;
+              }
             }
           };
           updateClock();
@@ -1188,7 +1370,13 @@ ${extra}
           adjustPower,
           adjustVoltage,
           injectFault,
-          applyActionDirectly
+          applyActionDirectly,
+          wearData,
+          consumableInfo,
+          wearStatus,
+          adjustWear,
+          replaceConsumable,
+          runWearScan
         };
       }
     }).mount('#app');
