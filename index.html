@@ -1,0 +1,1754 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FabMind v3.0 | 晶圓廠零信任即時異常排解與知識協作方案</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Vue 3 CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            fab: {
+              dark: '#0A0E17',
+              card: '#121826',
+              cardHover: '#1B2438',
+              border: '#1E293B',
+              accent: '#06B6D4',
+              success: '#10B981',
+              warning: '#F59E0B',
+              danger: '#EF4444'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* 無塵室黃光高對比模式 (Cleanroom Yellow Guard Mode) */
+    .cleanroom-mode {
+      background-color: #0b0a00 !important;
+      color: #ffe817 !important;
+    }
+    .cleanroom-mode .bg-fab-card,
+    .cleanroom-mode .bg-slate-900,
+    .cleanroom-mode .bg-slate-950 {
+      background-color: #191600 !important;
+      border-color: #5c5200 !important;
+    }
+    .cleanroom-mode .text-slate-300, 
+    .cleanroom-mode .text-slate-400,
+    .cleanroom-mode .text-slate-500 {
+      color: #dfcb26 !important;
+    }
+    .cleanroom-mode .border-fab-border,
+    .cleanroom-mode .border-slate-800 {
+      border-color: #5c5200 !important;
+    }
+    @keyframes pulse-ring {
+      0%, 100% { border-color: rgba(239, 68, 68, 0.4); box-shadow: 0 0 10px rgba(239, 68, 68, 0.2); }
+      50% { border-color: rgba(239, 68, 68, 1); box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
+    }
+    .alarm-ring {
+      animation: pulse-ring 1.8s infinite;
+    }
+    /* 自訂滑桿外觀 */
+    input[type=range] {
+      accent-color: #06B6D4;
+    }
+  </style>
+</head>
+<body class="bg-[#0A0E17] text-slate-100 min-h-screen font-sans selection:bg-cyan-500 selection:text-white" id="app">
+  <div :class="{'cleanroom-mode': cleanroomMode}" :style="{ fontSize: uiScale + '%' }" class="min-h-screen flex flex-col transition-all duration-300">
+    
+    <!-- Top Navigation Bar -->
+    <header class="border-b border-fab-border bg-[#0A0E17]/95 backdrop-blur sticky top-0 z-50 px-4 lg:px-8 py-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-lg bg-cyan-500/20 border border-cyan-500/50 flex items-center justify-center text-cyan-400 font-extrabold text-xl shadow-lg shadow-cyan-500/20">
+            FM
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="font-extrabold tracking-wider text-lg text-white">FabMind v3.0</span>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-900/60 border border-cyan-500/40 text-cyan-300 font-mono">Air-gapped Bypass</span>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 font-mono">Zero-Trust Active</span>
+            </div>
+            <p class="text-xs text-slate-400 hidden sm:block">晶圓廠零信任即時異常排解與知識協作方案 (Constrained Action Space)</p>
+          </div>
+        </div>
+
+        <!-- System Controls & Mode Switch -->
+        <div class="flex items-center space-x-2 sm:space-x-3">
+          <!-- Tuning Drawer Button -->
+          <button @click="changeTab('tuning')" 
+            :class="currentTab === 'tuning' ? 'bg-cyan-600 text-white font-bold' : 'bg-slate-800 text-cyan-300 border-slate-700 hover:border-cyan-400'"
+            class="px-2.5 py-1.5 rounded-lg border text-xs flex items-center space-x-1.5 transition">
+            <span>⚙️ 參數調校中心</span>
+          </button>
+
+          <!-- Sound Toggle Button -->
+          <button @click="toggleSound" 
+            :class="soundEnabled ? 'text-cyan-400 border-cyan-500/40 bg-cyan-950/40' : 'text-slate-500 border-slate-800 bg-slate-900'"
+            class="px-2.5 py-1.5 rounded-lg border text-xs flex items-center space-x-1 transition"
+            :title="soundEnabled ? '音效已開啟' : '音效已靜音'">
+            <span>{{ soundEnabled ? '🔊' : '🔇' }}</span>
+          </button>
+
+          <!-- Cleanroom Mode Switch -->
+          <button @click="toggleCleanroomMode" 
+            :class="cleanroomMode ? 'bg-yellow-400 text-black border-yellow-300 font-bold' : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-yellow-400/50'"
+            class="px-3 py-1.5 rounded-lg border text-xs sm:text-sm flex items-center space-x-1.5 transition">
+            <span class="w-2 h-2 rounded-full" :class="cleanroomMode ? 'bg-black animate-ping' : 'bg-yellow-400'"></span>
+            <span>無塵黃光</span>
+          </button>
+
+          <!-- Current Tool & Fab Selector -->
+          <div class="hidden md:flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs">
+            <span class="text-slate-400">廠區:</span>
+            <select v-model="currentFab" class="bg-transparent text-cyan-400 font-medium focus:outline-none cursor-pointer">
+              <option value="Hsinchu_Fab12B" class="bg-slate-900">台灣竹科 Fab 12B (Golden Tool)</option>
+              <option value="Tainan_Fab18" class="bg-slate-900">台灣南科 Fab 18 (量產母廠)</option>
+              <option value="Kumamoto_JASM" class="bg-slate-900">日本熊本 JASM (海外廠)</option>
+              <option value="Arizona_Fab21" class="bg-slate-900">美國亞利桑那 Fab 21 (海外廠)</option>
+            </select>
+          </div>
+
+          <div class="flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded-lg text-emerald-400 text-xs font-mono">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span class="hidden sm:inline">唯讀旁路</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex space-x-1 sm:space-x-3 mt-3 overflow-x-auto text-xs sm:text-sm font-medium border-t border-slate-800 pt-2">
+        <button v-for="tab in tabs" :key="tab.id" @click="changeTab(tab.id)"
+          :class="currentTab === tab.id ? 'border-cyan-400 text-cyan-300 bg-cyan-950/40' : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'"
+          class="px-3 py-2 rounded-t-lg border-b-2 flex items-center space-x-2 whitespace-nowrap transition">
+          <span>{{ tab.icon }}</span>
+          <span>{{ tab.name }}</span>
+          <span v-if="tab.badge" class="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-red-500/90 text-white font-mono animate-bounce">{{ tab.badge }}</span>
+        </button>
+      </nav>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+
+      <!-- ================= 全廠機隊矩陣看板 (Fleet Equipment Matrix) ================= -->
+      <div class="bg-fab-card rounded-xl border border-fab-border p-4 shadow-lg">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-2">
+          <div class="flex items-center space-x-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+            <span class="text-xs font-bold text-white uppercase tracking-wider">生產線全機台即時狀態矩陣 (Equipment Fleet Matrix)</span>
+            <span class="text-[11px] text-slate-400 font-mono">SECS/GEM 實時在線</span>
+          </div>
+          <div class="flex items-center space-x-2 text-xs">
+            <span class="text-slate-400">當前選擇機台:</span>
+            <span class="px-2 py-0.5 rounded bg-cyan-950 border border-cyan-500/40 text-cyan-300 font-bold font-mono">{{ activeTool.id }} ({{ activeTool.type }})</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5 mt-3 text-xs">
+          <div v-for="tool in equipmentList" :key="tool.id" 
+            @click="selectEquipment(tool)"
+            :class="[
+              activeTool.id === tool.id ? 'ring-2 ring-cyan-400 bg-slate-900' : 'bg-slate-950/80 hover:bg-slate-900',
+              tool.hasAlarm ? 'border-red-500/80 alarm-ring' : 'border-slate-800'
+            ]"
+            class="p-2.5 rounded-lg border cursor-pointer transition flex flex-col justify-between">
+            <div class="flex justify-between items-start">
+              <span class="font-bold font-mono text-white">{{ tool.id }}</span>
+              <span :class="tool.hasAlarm ? 'bg-red-950 text-red-300 border-red-500/50' : 'bg-emerald-950 text-emerald-300 border-emerald-500/30'"
+                class="px-1.5 py-0.2 rounded text-[10px] font-mono border">
+                {{ tool.status }}
+              </span>
+            </div>
+            <div class="mt-2 text-[11px] text-slate-400 flex justify-between font-mono">
+              <span>OEE: {{ tool.oee }}%</span>
+              <span :class="tool.health < 80 ? 'text-amber-400 font-bold' : 'text-emerald-400'">{{ tool.health }}分</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= TAB 1: 戰情總覽與 8秒滑動視窗聚合 ================= -->
+      <section v-if="currentTab === 'overview'" class="space-y-6">
+        
+        <!-- 四階段量化驗收指標 (隨參數動態更新) -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="bg-fab-card p-4 rounded-xl border border-fab-border relative overflow-hidden">
+            <div class="text-xs text-slate-400 font-medium">連鎖警報抑制率 (動態計算)</div>
+            <div class="text-2xl sm:text-3xl font-extrabold text-cyan-400 mt-1 font-mono">{{ calculatedSuppressionRate }}%</div>
+            <div class="text-[11px] text-emerald-400 mt-1">
+              <span>▲ 視窗 {{ configWindowSeconds }}s (標準 &gt; 85%)</span>
+            </div>
+            <div class="absolute -bottom-2 -right-2 text-cyan-500/10 font-bold text-6xl select-none">8S</div>
+          </div>
+
+          <div class="bg-fab-card p-4 rounded-xl border border-fab-border relative overflow-hidden">
+            <div class="text-xs text-slate-400 font-medium">試點機台 MTTR 修復時間</div>
+            <div class="text-2xl sm:text-3xl font-extrabold text-emerald-400 mt-1 font-mono">-36.5%</div>
+            <div class="text-[11px] text-emerald-400 mt-1">
+              <span>▲ 驗收目標縮短 &gt; 35%</span>
+            </div>
+            <div class="absolute -bottom-2 -right-2 text-emerald-500/10 font-bold text-6xl select-none">MTTR</div>
+          </div>
+
+          <div class="bg-fab-card p-4 rounded-xl border border-fab-border relative overflow-hidden">
+            <div class="text-xs text-slate-400 font-medium">無塵室異常回饋平均耗時</div>
+            <div class="text-2xl sm:text-3xl font-extrabold text-amber-400 mt-1 font-mono">{{ feedbackDuration }} 秒</div>
+            <div class="text-[11px] text-emerald-400 mt-1">
+              <span>▲ 驗收目標 &lt; 15 秒極速閉環</span>
+            </div>
+            <div class="absolute -bottom-2 -right-2 text-amber-500/10 font-bold text-6xl select-none">15S</div>
+          </div>
+
+          <div class="bg-fab-card p-4 rounded-xl border border-fab-border relative overflow-hidden">
+            <div class="text-xs text-slate-400 font-medium">百筆盲測前三項命中率</div>
+            <div class="text-2xl sm:text-3xl font-extrabold text-purple-400 mt-1 font-mono">89.4%</div>
+            <div class="text-[11px] text-emerald-400 mt-1">
+              <span>▲ 現場誤報 3.1% (&lt; 5%)</span>
+            </div>
+            <div class="absolute -bottom-2 -right-2 text-purple-500/10 font-bold text-6xl select-none">TOP3</div>
+          </div>
+        </div>
+
+        <!-- 8秒滑動視窗聚合器展示與模擬觸發 -->
+        <div class="bg-fab-card rounded-xl border border-fab-border p-5 shadow-xl">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-3">
+            <div>
+              <div class="flex items-center space-x-2">
+                <span class="w-3 h-3 rounded-full bg-cyan-400 animate-ping"></span>
+                <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                  <span>邊緣過濾層：滑動視窗警報風暴抑制器</span>
+                  <span class="text-xs bg-cyan-900/60 text-cyan-300 px-2 py-0.5 rounded font-mono">目前設定: {{ configWindowSeconds }} 秒視窗</span>
+                </h2>
+              </div>
+              <p class="text-xs text-slate-400 mt-1">透過滑動視窗聚合器壓縮連鎖報警，鎖定首發根因；支援即時調整視窗大小看動態抑制率</p>
+            </div>
+            
+            <!-- 多重情境切換與模擬按鈕 -->
+            <div class="flex items-center space-x-2">
+              <select v-model="selectedScenario" class="bg-slate-900 border border-slate-800 text-xs text-cyan-300 rounded-lg px-2.5 py-2 focus:outline-none">
+                <option value="scenario_rf">情境 1: 射頻電容失諧 (RF Matcher)</option>
+                <option value="scenario_pump">情境 2: 乾式幫浦軸承突發異常 (Dry Pump)</option>
+                <option value="scenario_he">情境 3: 靜電吸盤氦氣背壓洩漏 (He Backside)</option>
+              </select>
+
+              <button @click="triggerAlarmStorm" :disabled="simulatingStorm"
+                class="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1.5 shadow-lg shadow-red-600/30 whitespace-nowrap">
+                <span>⚡ {{ simulatingStorm ? '正在聚合視窗...' : '觸發連鎖警報風暴模擬' }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 聚合狀態展示條 -->
+          <div class="mt-4 p-3 bg-slate-900/90 rounded-lg border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+            <div class="flex items-center space-x-3">
+              <span class="text-slate-400">視窗計數器:</span>
+              <span class="text-cyan-400 font-bold text-sm">{{ slidingWindowCountdown }}s / {{ configWindowSeconds }}s</span>
+              <div class="w-32 bg-slate-800 rounded-full h-2 overflow-hidden">
+                <div class="bg-cyan-500 h-full transition-all duration-300" :style="{ width: (slidingWindowCountdown / configWindowSeconds * 100) + '%' }"></div>
+              </div>
+            </div>
+            <div>
+              原始進線報警: <span class="text-red-400 font-bold">{{ rawAlarmCount }} 筆</span>
+              → 聚合壓縮後: <span class="text-emerald-400 font-bold">1 筆首發根因 + {{ rawAlarmCount > 1 ? rawAlarmCount - 1 : 0 }} 筆伴生被抑制</span>
+              <span class="ml-2 text-cyan-300 font-bold">(抑制率 {{ calculatedSuppressionRate }}%)</span>
+            </div>
+          </div>
+
+          <!-- 聚合結果對比清單 -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+            <!-- 原始警報 (連鎖風暴) -->
+            <div class="border border-slate-800 rounded-lg p-3 bg-slate-950/60">
+              <div class="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-slate-800">
+                <span class="font-bold text-red-400">🔴 SECS/GEM 原始連鎖進線 (未經滑動過濾)</span>
+                <span>{{ currentScenarioAlarms.length }} 則未摺疊</span>
+              </div>
+              <div class="mt-2 space-y-1.5 max-h-64 overflow-y-auto text-xs font-mono pr-1">
+                <div v-for="(al, idx) in currentScenarioAlarms" :key="idx" class="p-2 rounded bg-slate-900/70 border border-slate-800 flex justify-between items-center text-slate-300">
+                  <div class="truncate mr-2">
+                    <span class="text-slate-500">[{{ al.time }}]</span>
+                    <span class="text-amber-400 font-bold ml-1">{{ al.tool }}</span>: {{ al.code }} - {{ al.desc }}
+                  </div>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-red-950 text-red-300 whitespace-nowrap">{{ al.level }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- FabMind 聚合後首發根因 -->
+            <div class="border border-cyan-500/40 rounded-lg p-3 bg-cyan-950/20">
+              <div class="flex items-center justify-between text-xs pb-2 border-b border-cyan-900/50">
+                <span class="font-bold text-cyan-300">🎯 FabMind 智慧壓縮結果 (鎖定首發根因)</span>
+                <span class="text-emerald-400 font-bold">抑制率 {{ calculatedSuppressionRate }}%</span>
+              </div>
+              <div class="mt-2 space-y-3">
+                <div class="p-3 rounded-lg bg-slate-900 border-2 border-red-500/80 alarm-ring">
+                  <div class="flex items-center justify-between">
+                    <span class="px-2 py-0.5 rounded bg-red-600 text-white font-extrabold text-[11px]">首發根本原因 (First Root Cause)</span>
+                    <span class="text-xs text-slate-400 font-mono">時間點: T+0.00s</span>
+                  </div>
+                  <div class="mt-2 text-sm font-bold text-white">
+                    機台: <span class="text-cyan-400">{{ activeTool.id }} (Chamber A)</span> | 製程步驟: <span class="text-amber-400 font-mono">Step ID #104 (Main Etch)</span>
+                  </div>
+                  <div class="text-xs text-red-300 mt-1 font-mono font-bold">
+                    {{ currentRootCause.title }}
+                  </div>
+                  <div class="mt-2 text-xs text-slate-300 bg-slate-950/80 p-2.5 rounded border border-slate-800 leading-relaxed">
+                    <span class="text-emerald-400 font-bold">💡 系統排解對策引導:</span> 
+                    {{ currentRootCause.guidance }}
+                  </div>
+                  <div class="mt-3 flex gap-2">
+                    <button @click="changeTab('tablet')" class="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-xs font-bold transition flex items-center gap-1 shadow-md shadow-cyan-600/30">
+                      <span>無塵室平板進入排解決策樹</span> →
+                    </button>
+                    <button @click="changeTab('crossfab')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-medium transition">
+                      比對母廠 Golden 波形
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 伴生連鎖摺疊清單 -->
+                <div class="text-xs text-slate-400">
+                  <details class="cursor-pointer">
+                    <summary class="hover:text-cyan-400 transition font-mono">
+                      ▶ 點擊檢視被自動抑制的 23 筆次級連鎖警報 (已防護警報風暴)
+                    </summary>
+                    <div class="mt-2 space-y-1 pl-3 border-l-2 border-slate-800 text-[11px] text-slate-500 font-mono max-h-36 overflow-y-auto">
+                      <div v-for="(sup, sIdx) in currentScenarioAlarms.slice(1)" :key="sIdx">
+                        [{{ sup.time }}]: {{ sup.code }} - {{ sup.desc }} (伴生被抑制)
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================= TAB 2: 無塵室人機協作平板（零打字決策樹 & 8D 報告匯出） ================= -->
+      <section v-if="currentTab === 'tablet'" class="space-y-6">
+        
+        <!-- 平板頂部狀態列 -->
+        <div class="bg-fab-card p-4 rounded-xl border border-fab-border flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center space-x-3">
+            <span class="text-2xl">📱</span>
+            <div>
+              <div class="flex items-center space-x-2">
+                <h2 class="text-base sm:text-lg font-bold text-white">無塵室工程師行動終端 (Cleanroom Tablet Pad)</h2>
+                <span class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded">雙層手套優化 / 70dB 噪音環境</span>
+              </div>
+              <p class="text-xs text-slate-400">目前報警機台: <span class="text-cyan-400 font-mono font-bold">{{ activeTool.id }} Chamber A</span> | 製程步驟: <span class="text-amber-400 font-mono">Step 104 Main Etch</span></p>
+            </div>
+          </div>
+          
+          <!-- 受限動作空間防幻覺提示 -->
+          <div class="bg-purple-950/50 border border-purple-500/40 px-3 py-1.5 rounded-lg text-xs">
+            <span class="text-purple-300 font-bold">🔒 受限動作空間 (Constrained Action Space):</span>
+            <span class="text-slate-300 ml-1">所有處置皆強制綁定手冊與 EAM 料號，嚴禁憑空編造指令</span>
+          </div>
+        </div>
+
+        <!-- 決策樹與 Interlock 驗證介面 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <!-- 左側 2 欄: 零打字步驟決策樹 (3 個綁定原廠手冊的行動方案) -->
+          <div class="lg:col-span-2 space-y-4">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-bold text-slate-300 flex items-center space-x-2">
+                <span>零打字推薦排解步驟 (依動態事實加權即時排序)</span>
+              </h3>
+              <button @click="changeTab('tuning')" class="text-xs text-cyan-400 hover:underline">
+                ⚙️ 調整權重與 Interlock 門檻
+              </button>
+            </div>
+
+            <div v-for="(act, idx) in sortedActions" :key="idx" 
+              :class="{'ring-2 ring-cyan-500 bg-slate-900': selectedActionIndex === idx, 'bg-fab-card': selectedActionIndex !== idx}"
+              class="border border-fab-border rounded-xl p-4 transition cursor-pointer hover:border-cyan-500/60"
+              @click="selectAction(idx)">
+              
+              <div class="flex items-start justify-between">
+                <div class="flex items-center space-x-2">
+                  <span class="w-6 h-6 rounded-full bg-cyan-900/60 border border-cyan-400/50 flex items-center justify-center text-xs font-bold text-cyan-300 font-mono">
+                    {{ idx + 1 }}
+                  </span>
+                  <span class="font-bold text-white text-base">{{ act.title }}</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <span class="text-xs px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono font-bold">動態信心度 {{ act.calculatedConfidence }}%</span>
+                  <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">{{ act.sourceTag }}</span>
+                </div>
+              </div>
+
+              <!-- 嚴格綁定來源 -->
+              <div class="mt-2 text-xs text-slate-400 space-y-1">
+                <div class="flex items-center space-x-1">
+                  <span class="text-cyan-400 font-semibold">📖 原廠手冊綁定:</span>
+                  <span class="font-mono text-slate-300">{{ act.manualBinding }}</span>
+                </div>
+                <div class="flex items-center space-x-1">
+                  <span class="text-emerald-400 font-semibold">📦 EAM 換件料號:</span>
+                  <span class="font-mono text-slate-300">{{ act.partNumber }}</span>
+                </div>
+                <p class="text-slate-300 pt-1 text-xs">{{ act.description }}</p>
+              </div>
+
+              <!-- 硬體安全互鎖 (Interlock) 狀態檢查 (即時連動可調參數) -->
+              <div class="mt-3 pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between text-xs gap-2">
+                <div class="flex items-center space-x-2">
+                  <span class="font-bold text-slate-400">安全互鎖 (Interlock) 檢核:</span>
+                  <span v-if="act.isInterlockPassed" class="text-emerald-400 flex items-center gap-1 font-bold">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span> 條件已滿足，允許下發處置
+                  </span>
+                  <span v-else class="text-red-400 flex items-center gap-1 font-bold">
+                    <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span> ⚠️ 硬體互鎖未達成 (系統禁止執行此項)
+                  </span>
+                </div>
+                <button @click.stop="toggleInterlockDetail(idx)" class="text-cyan-400 hover:underline text-[11px]">
+                  檢視機台實時傳感條件
+                </button>
+              </div>
+
+              <!-- 互鎖詳細條件 (動態展開) -->
+              <div v-if="act.showInterlockDetail" class="mt-2 p-2.5 bg-slate-950 rounded text-xs font-mono space-y-1 text-slate-300 border border-slate-800">
+                <div v-for="(cond, cIdx) in act.interlockConditions" :key="cIdx" class="flex justify-between items-center">
+                  <span>{{ cond.name }}:</span>
+                  <span :class="cond.ok ? 'text-emerald-400' : 'text-red-400 font-bold'">
+                    {{ cond.current }} (門檻要求: {{ cond.required }}) [{{ cond.ok ? '通過' : '未達標' }}]
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 15秒極速結案回流閉環與 8D 匯出 -->
+            <div class="bg-gradient-to-r from-emerald-950/40 to-slate-900 border border-emerald-500/40 rounded-xl p-4 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                  <span class="text-xl">⏱️</span>
+                  <h4 class="font-bold text-emerald-300 text-sm">無塵室 15 秒極速回流閉環 (Fast Feedback Loop)</h4>
+                </div>
+                <span class="text-xs text-slate-400 font-mono">閉環耗時: <strong class="text-amber-400">{{ feedbackDuration }}s</strong> (目標 &lt; 15s)</span>
+              </div>
+
+              <!-- 快速口述範本快捷鍵 -->
+              <div class="space-y-1">
+                <div class="text-[11px] text-slate-400">抗噪台式術語語音快捷補充 (SenseVoice 模擬):</div>
+                <div class="flex flex-wrap gap-1.5 text-xs">
+                  <button v-for="(phrase, pIdx) in speechTemplates" :key="pIdx"
+                    @click="applySpeechTemplate(phrase)"
+                    class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 text-[11px]">
+                    "{{ phrase }}"
+                  </button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <!-- 語音口述補充按鈕 -->
+                <button @click="toggleVoiceRecord" :class="isRecording ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'"
+                  class="p-3 rounded-lg border border-slate-700 text-xs font-bold flex items-center justify-center space-x-2 transition">
+                  <span>🎙️</span>
+                  <span>{{ isRecording ? '骨傳導抗噪收音中 (點擊停止)...' : '啟動抗噪台式術語語音辨識' }}</span>
+                </button>
+
+                <!-- 快速勾選回報完成 -->
+                <button @click="submitFastFeedback" :disabled="submittingFeedback"
+                  class="p-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white rounded-lg text-xs font-bold flex items-center justify-center space-x-2 transition shadow-lg shadow-emerald-600/20">
+                  <span>✅</span>
+                  <span>{{ submittingFeedback ? '正在調升圖譜權重並產生 8D...' : '確認此處置已恢復稼動 (15s 結案)' }}</span>
+                </button>
+              </div>
+
+              <!-- 語音轉譯預覽與自動生成結案內容 -->
+              <div v-if="voiceTranscript || lastClosureReport" class="p-3 bg-slate-950 rounded border border-slate-800 text-xs font-mono space-y-2">
+                <div v-if="voiceTranscript" class="text-cyan-300">
+                  <span class="text-slate-400">口述補充轉譯:</span> "{{ voiceTranscript }}"
+                </div>
+                <div v-if="lastClosureReport" class="text-emerald-400">
+                  <span class="text-slate-400">已自動生成 8D 結案紀錄:</span> {{ lastClosureReport }}
+                  <div class="text-[11px] text-cyan-400 mt-1">▲ 該排解路徑圖譜權重已自動調升 +0.12 (越用越準)</div>
+                </div>
+
+                <!-- 8D 報告匯出按鈕區 -->
+                <div v-if="lastClosureReport" class="pt-2 border-t border-slate-800 flex gap-2">
+                  <button @click="copyReport" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs transition">
+                    📋 {{ copySuccess ? '已複製 8D 報告！' : '複製完整 8D 報告' }}
+                  </button>
+                  <button @click="downloadReport" class="px-3 py-1 bg-cyan-700 hover:bg-cyan-600 text-white rounded text-xs transition">
+                    💾 下載 8D 結案報告 (.txt)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- 右側 1 欄: 實時機台互鎖監測 (與可調門檻連動) -->
+          <div class="space-y-4">
+            <div class="bg-fab-card p-4 rounded-xl border border-fab-border">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider">機台硬體互鎖即時狀態監控</h4>
+                <span class="text-[10px] text-cyan-400 font-mono">實時連動安全門檻</span>
+              </div>
+              
+              <div class="space-y-2.5 text-xs font-mono">
+                <div class="p-2.5 rounded bg-slate-900 border border-slate-800 flex justify-between items-center">
+                  <div>
+                    <div class="font-bold text-white font-sans">Chamber 真空度</div>
+                    <div class="text-slate-400 text-[11px]">{{ machineStatus.vacuum }} mTorr (門檻: &lt; {{ configInterlockVacuum }} mTorr)</div>
+                  </div>
+                  <span :class="machineStatus.vacuum < configInterlockVacuum ? 'bg-emerald-950 text-emerald-400' : 'bg-red-950 text-red-400'" class="px-2 py-0.5 rounded">
+                    {{ machineStatus.vacuum < configInterlockVacuum ? 'SAFE' : 'FAIL' }}
+                  </span>
+                </div>
+
+                <div class="p-2.5 rounded bg-slate-900 border border-slate-800 flex justify-between items-center">
+                  <div>
+                    <div class="font-bold text-white font-sans">RF 射頻主電源互鎖</div>
+                    <div class="text-slate-400 text-[11px]">{{ machineStatus.rfPower }} W (門檻: &le; {{ configInterlockRF }} W)</div>
+                  </div>
+                  <span :class="machineStatus.rfPower <= configInterlockRF ? 'bg-emerald-950 text-emerald-400' : 'bg-red-950 text-red-400'" class="px-2 py-0.5 rounded">
+                    {{ machineStatus.rfPower <= configInterlockRF ? 'ISOLATED' : 'HOT' }}
+                  </span>
+                </div>
+
+                <div class="p-2.5 rounded bg-slate-900 border border-slate-800 flex justify-between items-center">
+                  <div>
+                    <div class="font-bold text-white font-sans">特用氣體管路閥門</div>
+                    <div class="text-slate-400 text-[11px]">Pneumatic Valve Locked</div>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400">CLOSED</span>
+                </div>
+
+                <div class="p-2.5 rounded bg-slate-900 border border-slate-800 flex justify-between items-center">
+                  <div>
+                    <div class="font-bold text-white font-sans">Chamber 腔體溫度</div>
+                    <div class="text-slate-400 text-[11px]">{{ machineStatus.temp }} °C (安全接觸門檻: &lt; {{ configInterlockTemp }} °C)</div>
+                  </div>
+                  <span :class="machineStatus.temp < configInterlockTemp ? 'bg-emerald-950 text-emerald-400' : 'bg-amber-950 text-amber-400'" class="px-2 py-0.5 rounded">
+                    {{ machineStatus.temp < configInterlockTemp ? 'NORMAL' : 'TOO HOT' }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- 動作防呆宣告 -->
+              <div class="mt-4 p-2.5 bg-red-950/40 border border-red-500/30 rounded text-[11px] text-red-300 leading-relaxed">
+                <strong>硬體防呆互鎖：</strong> 若安全互鎖條件未完全滿足，硬體端阻斷執行訊號，杜絕電弧損毀晶圓或機台。
+              </div>
+            </div>
+
+            <!-- 無塵室操作指南提示 -->
+            <div class="bg-fab-card p-4 rounded-xl border border-fab-border text-xs space-y-2 text-slate-400">
+              <div class="font-bold text-slate-200">無塵室觸控設定已同步</div>
+              <p>目前介面縮放比例為 {{ uiScale }}%，按鍵具備高反差邊界，支援戴手套精準盲按。</p>
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- ================= TAB 3: Pre-LLM 雙向保險庫 & Copy Exactly 跨廠波形預警 ================= -->
+      <section v-if="currentTab === 'crossfab'" class="space-y-6">
+        
+        <div class="bg-fab-card p-4 rounded-xl border border-fab-border flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="text-cyan-400 font-bold text-base">Pre-LLM 雙向保險庫 & Copy Exactly 跨廠精準複製</span>
+              <span class="text-xs bg-cyan-900/60 text-cyan-300 px-2 py-0.5 rounded font-mono">OPA 權限策略引擎</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">跨廠經驗共享時自動隱藏敏感配方數值；母廠黃金機台（Golden Tool）即時波形預警，預防晶圓報廢。</p>
+          </div>
+
+          <!-- 身分與廠區權限切換模擬 -->
+          <div class="flex items-center space-x-2 bg-slate-900 p-2 rounded-lg border border-slate-800 text-xs">
+            <span class="text-slate-400">工程師身分授權:</span>
+            <button @click="userRole = 'Hsinchu_Engineer'" 
+              :class="userRole === 'Hsinchu_Engineer' ? 'bg-cyan-600 text-white font-bold' : 'bg-slate-800 text-slate-300'"
+              class="px-2.5 py-1 rounded transition">
+              竹科母廠工程師 (全權限)
+            </button>
+            <button @click="userRole = 'Overseas_Engineer'" 
+              :class="userRole === 'Overseas_Engineer' ? 'bg-purple-600 text-white font-bold' : 'bg-slate-800 text-slate-300'"
+              class="px-2.5 py-1 rounded transition">
+              海外廠工程師 (配方遮蔽)
+            </button>
+          </div>
+        </div>
+
+        <!-- Pre-LLM 雙向保險庫 (脫敏與還原對比) -->
+        <div class="bg-fab-card rounded-xl border border-fab-border p-5">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <span>Pre-LLM 雙向保險庫即時脫敏機制 (Cross-Fab Zero Recipe Leak)</span>
+            </h3>
+            <span class="text-xs font-mono text-purple-400">目前權限檢核: {{ userRole === 'Hsinchu_Engineer' ? 'OPA 政策已放行還原真實數值' : 'OPA 政策已強制啟用敏感參數遮蔽' }}</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-xs font-mono">
+            <!-- 進入大語言模型前的資料替換 -->
+            <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+              <div class="text-slate-400 font-bold mb-2 flex justify-between">
+                <span>1. 送入地端模型前 (保險庫抽象代碼化)</span>
+                <span class="text-cyan-400">Pre-LLM Sanitized</span>
+              </div>
+              <div class="space-y-1.5 text-slate-300 bg-slate-900/60 p-2 rounded border border-slate-800/80">
+                <div>機台類型: ADVANCED_ETCH_KIYO_V3</div>
+                <div>製程步驟: STEP_ID_104_MAIN_ETCH</div>
+                <div class="text-purple-300 font-bold">反應腔壓力: [PARAM_PRES_V01] mTorr (數值已抽象)</div>
+                <div class="text-purple-300 font-bold">RF 射頻功率: [PARAM_PWR_RF_02] W (數值已抽象)</div>
+                <div class="text-purple-300 font-bold">特用配方氣體 C4F8: [GAS_FLOW_A_01] sccm (代碼替換)</div>
+                <div class="text-purple-300 font-bold">靜電吸盤溫度: [TEMP_ESC_04] °C (代碼替換)</div>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-2">✨ LLM 僅理解物理關係，絕不接觸真實機密製程配方數值。</p>
+            </div>
+
+            <!-- 推理完成後在工程師端展示 -->
+            <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+              <div class="text-slate-400 font-bold mb-2 flex justify-between">
+                <span>2. 終端工程師視角 (依 OPA 策略決定還原)</span>
+                <span :class="userRole === 'Hsinchu_Engineer' ? 'text-emerald-400' : 'text-purple-400'">
+                  {{ userRole === 'Hsinchu_Engineer' ? '真實參數完整呈現' : '純排查邏輯 (配方遮蔽)' }}
+                </span>
+              </div>
+              <div class="space-y-1.5 text-slate-300 bg-slate-900/60 p-2 rounded border border-slate-800/80">
+                <template v-if="userRole === 'Hsinchu_Engineer'">
+                  <div class="text-emerald-400">✔ 反應腔壓力: 12.4 mTorr (規格 12.0~12.8)</div>
+                  <div class="text-emerald-400">✔ RF 射頻功率: 1850 W (規格 1800~1900)</div>
+                  <div class="text-emerald-400">✔ C4F8 氣體流量: 85.0 sccm (規格 84~86)</div>
+                  <div class="text-emerald-400">✔ 靜電吸盤溫度: 65.0 °C (規格 63~67)</div>
+                </template>
+                <template v-else>
+                  <div class="text-purple-300 font-mono">🔒 反應腔壓力: [PROTECTED_RECIPE_PARAM] (已隱藏)</div>
+                  <div class="text-purple-300 font-mono">🔒 RF 射頻功率: [PROTECTED_RECIPE_PARAM] (已隱藏)</div>
+                  <div class="text-purple-300 font-mono">🔒 C4F8 氣體流量: [PROTECTED_RECIPE_PARAM] (已隱藏)</div>
+                  <div class="text-purple-300 font-mono">🔒 靜電吸盤溫度: [PROTECTED_RECIPE_PARAM] (已隱藏)</div>
+                </template>
+                <div class="pt-2 text-slate-300 border-t border-slate-800">
+                  <span class="text-cyan-400 font-bold">排查邏輯分析:</span> 
+                  偵測到壓力值下降時射頻阻抗隨之跳變，指示 Matcher 電容有早期漏電洩漏，排查管路接頭是否氧化。
+                </div>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-2">海外工程師能獲得完整的故障診斷邏輯與經驗，但無法複製母廠極機密的製程配方。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Copy Exactly 即時波形預警模擬 (支援即時調整容差帶) -->
+        <div class="bg-fab-card rounded-xl border border-fab-border p-5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-2">
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <span>Copy Exactly 關鍵感測器波形早期偏移預警 (Step 104 Main Etch)</span>
+                <span class="text-xs bg-amber-950 text-amber-300 border border-amber-600/40 px-2 py-0.5 rounded">容差帶 &plusmn;{{ configWaveformTolerance }}%</span>
+              </h3>
+              <p class="text-xs text-slate-400 mt-1">基準: 台灣竹科母廠黃金機台 (Golden Tool) vs 目前海外廠機台即時採集曲線</p>
+            </div>
+            
+            <div class="flex items-center space-x-3 text-xs">
+              <!-- 容差帶微調控制 -->
+              <div class="flex items-center space-x-1.5 bg-slate-900 px-2 py-1 rounded border border-slate-800">
+                <span class="text-slate-400">容差門檻:</span>
+                <input type="range" min="1" max="8" step="0.5" v-model.number="configWaveformTolerance" @input="renderWaveformChart" class="w-16">
+                <span class="text-cyan-400 font-mono font-bold">&plusmn;{{ configWaveformTolerance }}%</span>
+              </div>
+
+              <select v-model="selectedWaveformSensor" @change="renderWaveformChart" class="bg-slate-900 border border-slate-800 text-cyan-400 rounded px-2 py-1">
+                <option value="pressure">腔體壓力 (Chamber Pressure)</option>
+                <option value="rf_reflected">射頻反射功率 (RF Reflected Power)</option>
+                <option value="temp">ESC 吸盤溫度 (Chuck Temp)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 波形圖表 -->
+          <div class="mt-4">
+            <div class="h-64 w-full">
+              <canvas id="waveformCanvas"></canvas>
+            </div>
+          </div>
+
+          <div class="mt-4 p-3 bg-slate-900/80 rounded-lg border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full" :class="isWaveformAlert ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'"></span>
+              <span class="text-slate-300 font-medium">即時偏離分析: 目前波形與母廠黃金帶偏離 +3.4% (當前警示設定門檻: {{ configWaveformTolerance }}%)</span>
+            </div>
+            <div :class="isWaveformAlert ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'">
+              {{ isWaveformAlert ? '⚠️ 早期偏移預警：預計在 4 批次後引發異常，建議提早更換 Matcher 閥件！' : '✔ 處於容差帶安全區間內，製程正常。' }}
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================= TAB 4: 因果圖譜與新機型零歷史冷啟動 ================= -->
+      <section v-if="currentTab === 'graph'" class="space-y-6">
+        
+        <div class="bg-fab-card p-4 rounded-xl border border-fab-border flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="text-cyan-400 font-bold text-base">事實加權、時間衰減與新機型冷啟動</span>
+              <span class="text-xs bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded font-mono">PostgreSQL 17 因果圖譜</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">以 EAM 實體換件與 EAP 參數微調為最高權重；新機型透過「共用零組件映射」直接繼承成熟機台經驗。</p>
+          </div>
+
+          <div class="flex items-center space-x-2">
+            <button @click="changeTab('tuning')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-xs font-bold border border-slate-700 transition">
+              ⚙️ 調整事實權重參數
+            </button>
+            <button @click="triggerECNUpdate" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold transition flex items-center space-x-1">
+              <span>⚙️ 模擬發布 ECN-2026-088</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 互動式因果圖譜 Canvas 與時間半衰期調節 -->
+        <div class="bg-fab-card rounded-xl border border-fab-border p-5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-3">
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <span>互動式因果圖譜節點網路 (Causal Graph Visualizer)</span>
+                <span class="text-xs bg-cyan-900/60 text-cyan-300 px-2 py-0.5 rounded font-mono">Dynamic Node Physics</span>
+              </h3>
+              <p class="text-xs text-slate-400 mt-1">展示「設備警報」➔「故障根因」➔「EAM 換件料號」➔「原廠 SOP」因果拓撲關聯</p>
+            </div>
+
+            <!-- 時間衰減半衰期調整滑桿 -->
+            <div class="flex items-center space-x-3 bg-slate-900 p-2 rounded-lg border border-slate-800 text-xs font-mono">
+              <span class="text-slate-400">時間半衰期 (Half-life):</span>
+              <input type="range" min="14" max="365" step="7" v-model.number="decayDays" @input="drawCausalGraph" class="w-24">
+              <span class="text-cyan-300 font-bold">{{ decayDays }} 天</span>
+            </div>
+          </div>
+
+          <!-- Canvas 因果圖譜畫布 -->
+          <div class="mt-4 relative bg-slate-950 rounded-lg border border-slate-800 p-2">
+            <canvas id="causalGraphCanvas" class="w-full h-72 block"></canvas>
+            <div class="absolute bottom-3 left-4 flex gap-3 text-[11px] font-mono text-slate-400">
+              <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> 設備警報節點</div>
+              <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span> 根因分析節點</div>
+              <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> EAM 換件節點 (權重 {{ configWeightEAM }})</div>
+              <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-purple-400"></span> 原廠手冊 SOP</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 雙欄架構：新機冷啟動映射 & 事實加權演算 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          <!-- 新機型冷啟動共用零組件映射 -->
+          <div class="bg-fab-card rounded-xl border border-fab-border p-5">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <span>新世代機型零歷史冷啟動 (Cold Start Wizard)</span>
+              </h3>
+              <button @click="triggerColdStartImport" :disabled="coldStartImporting" 
+                class="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-xs transition">
+                {{ coldStartImporting ? '繼承經驗中...' : '執行經驗繼承推演' }}
+              </button>
+            </div>
+
+            <div class="mt-4 space-y-3 text-xs">
+              <div class="p-3 bg-slate-900 rounded-lg border border-slate-800">
+                <div class="flex justify-between items-center">
+                  <span class="font-bold text-amber-400">新導入機型: Advanced Etch X-Prime (無歷史維修紀錄)</span>
+                  <span class="px-2 py-0.5 bg-slate-800 rounded text-slate-400">進廠 2 週</span>
+                </div>
+                <p class="text-slate-400 mt-1">面對初次引進的機台，系統自動從原廠手冊故障樹建立初始骨架，並分析共通次系統。</p>
+              </div>
+
+              <div class="text-xs font-bold text-slate-300">🔗 自動共用零組件映射關聯表:</div>
+
+              <div class="space-y-2 font-mono">
+                <div class="p-2.5 bg-slate-950 rounded border border-slate-800 flex justify-between items-center">
+                  <div>
+                    <div class="font-bold text-white font-sans">真空乾式幫浦 (Pfeiffer Dry Pump A300)</div>
+                    <div class="text-slate-400 text-[11px]">新機型與成熟機型 ETCH-01/02 共用同料號</div>
+                  </div>
+                  <span class="text-emerald-400 font-bold">繼承 42 筆</span>
+                </div>
+
+                <div class="p-2.5 bg-slate-950 rounded border border-slate-800 flex justify-between items-center">
+                  <div>
+                    <div class="font-bold text-white font-sans">高頻射頻產生器 (Comdel RF Generator 13.56MHz)</div>
+                    <div class="text-slate-400 text-[11px]">與成熟機型 CVD-02 共用同匹配箱</div>
+                  </div>
+                  <span class="text-emerald-400 font-bold">繼承 85 筆</span>
+                </div>
+
+                <div class="p-2.5 bg-slate-950 rounded border border-slate-800 flex justify-between items-center">
+                  <div>
+                    <div class="font-bold text-white font-sans">氣體流量控制器 (Horiba MFC 500sccm)</div>
+                    <div class="text-slate-400 text-[11px]">全廠共用元件</div>
+                  </div>
+                  <span class="text-emerald-400 font-bold">繼承 110 筆</span>
+                </div>
+              </div>
+
+              <div class="p-2.5 bg-cyan-950/40 border border-cyan-500/30 rounded text-cyan-300 text-[11px]">
+                💡 <strong>冷啟動效益：</strong> 新機型在安裝第一天即可擁有 237 筆經過實證的異常處置建議，無需耗費數月反覆試錯！
+              </div>
+            </div>
+          </div>
+
+          <!-- 事實加權與時間衰減權重展示 (動態連動配置) -->
+          <div class="bg-fab-card rounded-xl border border-fab-border p-5">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <span>事實加權與時間半衰期權重演算 (Fact-Weighting Engine)</span>
+              </h3>
+              <span class="text-xs text-emerald-400 font-mono">實時連動演算公式</span>
+            </div>
+
+            <div class="mt-4 space-y-3 text-xs">
+              <!-- 權重比較表 -->
+              <div class="space-y-2">
+                <div class="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
+                  <div>
+                    <span class="font-bold text-emerald-400">EAM 領料換件紀錄 (實際恢復稼動)</span>
+                    <div class="text-[11px] text-slate-400">真實硬體換件並通過量產檢測</div>
+                  </div>
+                  <span class="font-mono font-bold text-emerald-400 text-sm">權重 {{ configWeightEAM }}</span>
+                </div>
+
+                <div class="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
+                  <div>
+                    <span class="font-bold text-cyan-400">EAP / APC 參數微調校驗紀錄</span>
+                    <div class="text-[11px] text-slate-400">微調閥門開度與補償偏壓成功</div>
+                  </div>
+                  <span class="font-mono font-bold text-cyan-400 text-sm">權重 {{ configWeightEAP }}</span>
+                </div>
+
+                <div class="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
+                  <div>
+                    <span class="font-bold text-slate-400">流於形式之口述或陳舊 8D 報告</span>
+                    <div class="text-[11px] text-slate-500">無量化數據或未驗證推測</div>
+                  </div>
+                  <span class="font-mono font-bold text-red-400 text-sm">降權至 {{ configWeight8D }}</span>
+                </div>
+              </div>
+
+              <!-- ECN 工程變更警示狀態 -->
+              <div v-if="ecnActive" class="p-3 bg-red-950/60 border border-red-500/60 rounded-lg text-xs space-y-1">
+                <div class="flex items-center justify-between text-red-300 font-bold">
+                  <span>⚠️ 已套用工程變更通知 [ECN-2026-088]</span>
+                  <span class="text-[10px] bg-red-800 px-1.5 py-0.5 rounded text-white">RE-VALIDATE</span>
+                </div>
+                <p class="text-red-200 text-[11px]">
+                  變更項目: RF Matcher 電容由規格 C40 改版為 C45。系統已自動將舊處置標記為【需重新驗證】，防止工程師套用過期作法！
+                </p>
+              </div>
+
+              <!-- 時間衰減公式說明 -->
+              <div class="p-3 bg-slate-950 rounded-lg border border-slate-800 font-mono text-[11px] text-slate-400 space-y-1">
+                <div class="text-slate-300 font-bold">動態信心公式: Confidence = W_fact &times; e^(-ln(2)/{{ decayDays }} &times; &Delta;t)</div>
+                <div>• 半衰期目前設定為 {{ decayDays }} 天，可於參數調校中心隨時自訂</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- ================= TAB 5: 參數調校中心 (新增強大可調整功能) ================= -->
+      <section v-if="currentTab === 'tuning'" class="space-y-6">
+        
+        <div class="bg-fab-card p-5 rounded-xl border border-cyan-500/40 shadow-xl">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-3">
+            <div>
+              <div class="flex items-center space-x-2">
+                <span class="text-cyan-400 text-lg">⚙️</span>
+                <h2 class="text-base sm:text-lg font-bold text-white">FabMind 系統核心參數調校中心 (Control & Tuning Console)</h2>
+              </div>
+              <p class="text-xs text-slate-400 mt-1">即時微調演算法權重、安全互鎖門檻、滑動視窗與介面偏好，所有調整即時連動全系統演算！</p>
+            </div>
+            
+            <button @click="resetToDefaults" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-xs font-bold border border-slate-700 transition flex items-center space-x-1">
+              <span>🔄 重設為晶圓廠標準預設值</span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+            
+            <!-- 模組 1: 邊緣過濾層與滑動視窗參數 -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-4">
+              <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                <span class="text-sm font-bold text-cyan-400">1. 8 秒滑動視窗抑制器</span>
+                <span class="text-[11px] text-slate-500 font-mono">Edge Filter</span>
+              </div>
+
+              <!-- 視窗時間 -->
+              <div class="space-y-1.5">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-300">聚合滑動視窗時長 (Window Duration):</span>
+                  <span class="text-cyan-400 font-mono font-bold">{{ configWindowSeconds }} 秒</span>
+                </div>
+                <input type="range" min="3" max="15" step="1" v-model.number="configWindowSeconds" class="w-full">
+                <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+                  <span>3s (低延遲)</span>
+                  <span>8s (標準)</span>
+                  <span>15s (高抑制)</span>
+                </div>
+              </div>
+
+              <!-- 抖動容差 -->
+              <div class="space-y-1.5">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-300">時間戳抖動容差 (Jitter Tolerance):</span>
+                  <span class="text-cyan-400 font-mono font-bold">{{ configJitterMs }} ms</span>
+                </div>
+                <input type="range" min="100" max="1000" step="50" v-model.number="configJitterMs" class="w-full">
+              </div>
+
+              <div class="p-2.5 bg-slate-950 rounded text-[11px] text-slate-400 font-mono">
+                當前計算抑制率: <strong class="text-emerald-400">{{ calculatedSuppressionRate }}%</strong>
+              </div>
+            </div>
+
+            <!-- 模組 2: 事實加權圖譜與衰減參數 -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-4">
+              <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                <span class="text-sm font-bold text-emerald-400">2. 事實加權與衰減公式</span>
+                <span class="text-[11px] text-slate-500 font-mono">Knowledge Graph</span>
+              </div>
+
+              <!-- EAM 換件權重 -->
+              <div class="space-y-1.5">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-300">EAM 實體驗證換件初始權重:</span>
+                  <span class="text-emerald-400 font-mono font-bold">{{ configWeightEAM }}</span>
+                </div>
+                <input type="range" min="0.60" max="1.00" step="0.05" v-model.number="configWeightEAM" class="w-full">
+              </div>
+
+              <!-- EAP 參數微調權重 -->
+              <div class="space-y-1.5">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-300">EAP 參數調校紀錄初始權重:</span>
+                  <span class="text-cyan-400 font-mono font-bold">{{ configWeightEAP }}</span>
+                </div>
+                <input type="range" min="0.50" max="0.95" step="0.05" v-model.number="configWeightEAP" class="w-full">
+              </div>
+
+              <!-- 口述 8D 權重 -->
+              <div class="space-y-1.5">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-300">未量化口述 / 陳舊 8D 報告降權:</span>
+                  <span class="text-red-400 font-mono font-bold">{{ configWeight8D }}</span>
+                </div>
+                <input type="range" min="0.10" max="0.60" step="0.05" v-model.number="configWeight8D" class="w-full">
+              </div>
+            </div>
+
+            <!-- 模組 3: 硬體安全互鎖 (Interlock) 門檻配置 -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-4">
+              <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                <span class="text-sm font-bold text-amber-400">3. 硬體互鎖安全門檻</span>
+                <span class="text-[11px] text-slate-500 font-mono">Safety Interlock</span>
+              </div>
+
+              <!-- 真空門檻 -->
+              <div class="space-y-1.5">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-300">允許處置之基準真空度上限:</span>
+                  <span class="text-amber-400 font-mono font-bold">&lt; {{ configInterlockVacuum }} mTorr</span>
+                </div>
+                <input type="range" min="0.01" max="0.10" step="0.01" v-model.number="configInterlockVacuum" class="w-full">
+              </div>
+
+              <!-- 安全溫度門檻 -->
+              <div class="space-y-1.5">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-300">腔體安全接觸溫度上限:</span>
+                  <span class="text-amber-400 font-mono font-bold">&lt; {{ configInterlockTemp }} °C</span>
+                </div>
+                <input type="range" min="30" max="80" step="5" v-model.number="configInterlockTemp" class="w-full">
+              </div>
+
+              <!-- RF 漏電門檻 -->
+              <div class="space-y-1.5">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-300">RF 斷電安全功率容許上限:</span>
+                  <span class="text-amber-400 font-mono font-bold">&le; {{ configInterlockRF }} W</span>
+                </div>
+                <input type="range" min="0" max="20" step="2" v-model.number="configInterlockRF" class="w-full">
+              </div>
+            </div>
+
+            <!-- 模組 4: Copy Exactly 波形容差設定 -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-4">
+              <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                <span class="text-sm font-bold text-purple-400">4. Copy Exactly 容差帶</span>
+                <span class="text-[11px] text-slate-500 font-mono">Golden Tool Envelope</span>
+              </div>
+
+              <div class="space-y-1.5">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-300">黃金基準曲線容許上下限 (&plusmn;%):</span>
+                  <span class="text-purple-400 font-mono font-bold">&plusmn;{{ configWaveformTolerance }}%</span>
+                </div>
+                <input type="range" min="1.0" max="8.0" step="0.5" v-model.number="configWaveformTolerance" @input="renderWaveformChart" class="w-full">
+                <p class="text-[11px] text-slate-500 mt-1">實時影響波形圖表容差帶高度，偏離超過此閾值即觸發晶圓早期預警。</p>
+              </div>
+            </div>
+
+            <!-- 模組 5: 無塵室人機介面偏好 -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-4">
+              <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                <span class="text-sm font-bold text-yellow-400">5. 無塵室平板人機介面</span>
+                <span class="text-[11px] text-slate-500 font-mono">UI Accessibility</span>
+              </div>
+
+              <div class="space-y-1.5">
+                <div class="flex justify-between text-xs">
+                  <span class="text-slate-300">雙層手套介面字體與按鈕縮放:</span>
+                  <span class="text-yellow-400 font-mono font-bold">{{ uiScale }}%</span>
+                </div>
+                <input type="range" min="90" max="130" step="5" v-model.number="uiScale" class="w-full">
+                <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+                  <span>90% (標準電腦)</span>
+                  <span>100% (預設)</span>
+                  <span>130% (特大版)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 模組 6: 目前套用狀態摘要 -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+              <div>
+                <div class="text-sm font-bold text-white mb-2">全域設定套用狀態</div>
+                <p class="text-xs text-slate-400 leading-relaxed">
+                  所有設定值已透過 Vue 3 響應式雙向綁定至全系統，無需重新整理頁面。切換至任何分頁即可立即驗證參數微調帶來的即時效果！
+                </p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-800 text-xs text-emerald-400 font-mono">
+                ✔ 所有演算法與安全互鎖已即時同步更新
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================= TAB 6: 線上部署與雲端發布中心 ================= -->
+      <section v-if="currentTab === 'deploy'" class="space-y-6">
+        
+        <div class="bg-fab-card p-5 rounded-xl border border-fab-border">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div>
+              <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                <span>🌐 FabMind 網上架設與即時部署方案</span>
+                <span class="text-xs bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded font-mono">100% Ready</span>
+              </h2>
+              <p class="text-xs text-slate-400 mt-1">本系統支援多種無縫上線方式，可立刻發布到公網供團隊、主管與跨廠工程師直接在瀏覽器線上使用！</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+            <!-- 方案 A: Netlify Drop 免費一鍵上線 -->
+            <div class="bg-slate-900/90 border border-cyan-500/40 rounded-xl p-4 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="text-cyan-400 font-bold text-sm">方案 A: Netlify Drop</span>
+                  <span class="text-[10px] bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded font-mono">30 秒免指令上線</span>
+                </div>
+                <p class="text-xs text-slate-300 mt-2">
+                  本系統已內建 <code class="text-cyan-300">netlify.toml</code> 設定檔，只需將專案資料夾拖曳至 Netlify Drop 即可獲得永久 HTTPS 網址！
+                </p>
+                <div class="mt-3 bg-slate-950 p-2.5 rounded font-mono text-[11px] text-slate-400 space-y-1">
+                  <div>1. 打開 <a href="https://app.netlify.com/drop" target="_blank" class="text-cyan-400 underline">Netlify Drop</a></div>
+                  <div>2. 將專案資料夾拖曳上傳</div>
+                  <div>3. 立即獲得專屬網址存取！</div>
+                </div>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-800">
+                <span class="text-xs text-emerald-400 font-bold">✔ 零設定、零伺服器維護成本</span>
+              </div>
+            </div>
+
+            <!-- 方案 B: Vercel / GitHub Pages 免費託管 -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="text-purple-400 font-bold text-sm">方案 B: Vercel / GitHub Pages</span>
+                  <span class="text-[10px] bg-purple-950 text-purple-300 px-2 py-0.5 rounded font-mono">官方免費</span>
+                </div>
+                <p class="text-xs text-slate-300 mt-2">
+                  將儲存庫推送到 GitHub，已內建 <code class="text-purple-300">vercel.json</code>，或在 GitHub Settings 開啟 Pages，即可享有自動 CI/CD 部署。
+                </p>
+                <div class="mt-3 bg-slate-950 p-2.5 rounded font-mono text-[11px] text-slate-400 space-y-1">
+                  <div>git init && git add .</div>
+                  <div>git commit -m "Deploy FabMind"</div>
+                  <div>git push origin main</div>
+                </div>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-800">
+                <span class="text-xs text-purple-400 font-bold">✔ 適合企業內部版本控制與協同</span>
+              </div>
+            </div>
+
+            <!-- 方案 C: 本機 Python 即刻公網穿透展示 -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="text-amber-400 font-bold text-sm">方案 C: 即刻本機公網穿透</span>
+                  <span class="text-[10px] bg-amber-950 text-amber-300 px-2 py-0.5 rounded font-mono">立即演示</span>
+                </div>
+                <p class="text-xs text-slate-300 mt-2">
+                  使用內建的 <code class="text-amber-300">server.py</code> 啟動本機伺服器（自動跳過佔用端口），搭配 Cloudflare Tunnel 或 ngrok / localtunnel，5 秒產生公網臨時網址。
+                </p>
+                <div class="mt-3 bg-slate-950 p-2.5 rounded font-mono text-[11px] text-slate-400 space-y-1">
+                  <div>python server.py</div>
+                  <div>npx trycloudflare --port 3000</div>
+                </div>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-800">
+                <span class="text-xs text-amber-400 font-bold">✔ 免註冊帳號，即可遠端展示</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 詳細檔案配置 -->
+          <div class="mt-6 p-4 bg-slate-950 rounded-xl border border-slate-800">
+            <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">專案已生成之檔案架構</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs font-mono text-slate-400">
+              <div class="p-2 rounded bg-slate-900 border border-slate-800 text-cyan-300">📄 index.html (前端核心完整單頁應用)</div>
+              <div class="p-2 rounded bg-slate-900 border border-slate-800 text-emerald-300">🐍 server.py (自動避讓端口伺服器與 API)</div>
+              <div class="p-2 rounded bg-slate-900 border border-slate-800 text-purple-300">⚡ vercel.json (Vercel 部署設定檔)</div>
+              <div class="p-2 rounded bg-slate-900 border border-slate-800 text-amber-300">🌐 netlify.toml (Netlify 部署設定檔)</div>
+              <div class="p-2 rounded bg-slate-900 border border-slate-800 text-slate-300">📘 README.md (架構手冊與文檔)</div>
+              <div class="p-2 rounded bg-slate-900 border border-slate-800 text-slate-300">🚀 DEPLOY_GUIDE.md (圖文上線步驟)</div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-fab-border bg-fab-dark px-4 py-4 text-center text-xs text-slate-500">
+      <div class="flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto gap-2">
+        <span>FabMind v3.0 | 晶圓廠零信任即時異常排解與知識協作方案</span>
+        <div class="flex items-center space-x-3 font-mono text-[11px]">
+          <span>Air-Gapped Bypass</span>
+          <span>•</span>
+          <span>Pre-LLM Vault</span>
+          <span>•</span>
+          <span>PostgreSQL 17 Causal Graph</span>
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Vue 3 Application Script -->
+  <script>
+    const { createApp, ref, computed, onMounted } = Vue;
+
+    createApp({
+      setup() {
+        const cleanroomMode = ref(false);
+        const soundEnabled = ref(false);
+        const currentFab = ref('Hsinchu_Fab12B');
+        const currentTab = ref('overview');
+        const userRole = ref('Hsinchu_Engineer');
+        const selectedWaveformSensor = ref('pressure');
+        const decayDays = ref(90);
+
+        // 系統可調參數配置 (System Config & Tuning Parameters)
+        const configWindowSeconds = ref(8);
+        const configJitterMs = ref(300);
+        const configWeightEAM = ref(0.95);
+        const configWeightEAP = ref(0.85);
+        const configWeight8D = ref(0.35);
+        const configInterlockVacuum = ref(0.05); // mTorr
+        const configInterlockTemp = ref(70);    // °C
+        const configInterlockRF = ref(0);       // W
+        const configWaveformTolerance = ref(3.0); // %
+        const uiScale = ref(100); // %
+
+        const resetToDefaults = () => {
+          configWindowSeconds.value = 8;
+          configJitterMs.value = 300;
+          configWeightEAM.value = 0.95;
+          configWeightEAP.value = 0.85;
+          configWeight8D.value = 0.35;
+          configInterlockVacuum.value = 0.05;
+          configInterlockTemp.value = 70;
+          configInterlockRF.value = 0;
+          configWaveformTolerance.value = 3.0;
+          uiScale.value = 100;
+          decayDays.value = 90;
+          playBeep(880, 0.15);
+          alert('已成功重設為晶圓廠標準預設值！');
+        };
+
+        const tabs = ref([
+          { id: 'overview', name: '戰情室與警報聚合', icon: '📊', badge: '1' },
+          { id: 'tablet', name: '無塵室行動平板 (決策樹)', icon: '📱' },
+          { id: 'crossfab', name: 'Pre-LLM 保險庫與跨廠預警', icon: '🌐' },
+          { id: 'graph', name: '因果圖譜與新機冷啟動', icon: '🧠' },
+          { id: 'tuning', name: '⚙️ 參數調校中心', icon: '🎛️' },
+          { id: 'deploy', name: '網上架設部署中心', icon: '🚀' }
+        ]);
+
+        // 機台清單矩陣
+        const equipmentList = ref([
+          { id: 'ETCH-03', type: 'Advanced Etch', status: 'ALARM', hasAlarm: true, oee: 62.4, health: 58 },
+          { id: 'ETCH-01', type: 'Main Etch', status: 'RUNNING', hasAlarm: false, oee: 91.2, health: 94 },
+          { id: 'ETCH-02', type: 'Main Etch', status: 'RUNNING', hasAlarm: false, oee: 89.5, health: 91 },
+          { id: 'CVD-01', type: 'PECVD', status: 'RUNNING', hasAlarm: false, oee: 93.1, health: 96 },
+          { id: 'CVD-02', type: 'ALD/CVD', status: 'RUNNING', hasAlarm: false, oee: 88.0, health: 88 },
+          { id: 'ALD-01', type: 'Atomic Layer', status: 'RUNNING', hasAlarm: false, oee: 94.6, health: 97 }
+        ]);
+        const activeTool = ref(equipmentList.value[0]);
+
+        const machineStatus = ref({
+          vacuum: 0.024,
+          rfPower: 0,
+          temp: 65.2
+        });
+
+        const selectEquipment = (tool) => {
+          activeTool.value = tool;
+          playBeep(440, 0.08);
+        };
+
+        // Web Audio API 擬真音效
+        let audioCtx = null;
+        const playBeep = (freq = 600, duration = 0.1) => {
+          if (!soundEnabled.value) return;
+          try {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.frequency.value = freq;
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+          } catch(e) {}
+        };
+
+        const toggleSound = () => {
+          soundEnabled.value = !soundEnabled.value;
+          if (soundEnabled.value) playBeep(880, 0.15);
+        };
+
+        // 8秒滑動視窗情境與資料
+        const selectedScenario = ref('scenario_rf');
+        const slidingWindowCountdown = ref(8.0);
+        const simulatingStorm = ref(false);
+        const rawAlarmCount = ref(24);
+
+        // 動態抑制率公式 (隨視窗秒數增加而提升)
+        const calculatedSuppressionRate = computed(() => {
+          const base = 70.0;
+          const gain = (configWindowSeconds.value - 3) * 2.2;
+          return Math.min(95.5, parseFloat((base + gain).toFixed(1)));
+        });
+
+        const scenarioData = {
+          scenario_rf: {
+            root: {
+              title: '[ALARM-7721] RF Matcher Capacitor Phase Mismatch (射頻匹配電容失諧擊穿)',
+              guidance: '阻抗失諧為主因，直接排查 RF 匹配電容閥件與接地端阻抗，其餘 23 筆「腔體壓力漂移」、「電漿熄滅」、「晶圓溫度超標」皆為此失諧引發之附帶連鎖警報。'
+            },
+            alarms: [
+              { time: '10:48:12.00', tool: 'ETCH-03', code: 'ALARM-7721', desc: 'RF Matcher Phase Mismatch', level: 'CRITICAL (Root Cause)' },
+              { time: '10:48:12.82', tool: 'ETCH-03', code: 'ALARM-3021', desc: 'Chamber Pressure Surging (伴生)', level: 'WARNING' },
+              { time: '10:48:13.12', tool: 'ETCH-03', code: 'ALARM-9910', desc: 'Plasma Flame Out Detected (伴生)', level: 'CRITICAL' },
+              { time: '10:48:13.45', tool: 'ETCH-03', code: 'ALARM-2044', desc: 'ESC Chuck Temp Drift +2.1C (伴生)', level: 'WARNING' },
+              { time: '10:48:14.01', tool: 'ETCH-03', code: 'ALARM-1088', desc: 'Throttle Valve Angle Limit (伴生)', level: 'WARNING' },
+              { time: '10:48:14.50', tool: 'ETCH-03', code: 'ALARM-8152', desc: 'Wafer Bias Voltage Lost (伴生)', level: 'CRITICAL' },
+              { time: '10:48:15.22', tool: 'ETCH-03', code: 'ALARM-4401', desc: 'C4F8 Flow Fluctuation (伴生)', level: 'INFO' }
+            ]
+          },
+          scenario_pump: {
+            root: {
+              title: '[ALARM-4102] Dry Vacuum Pump Bearing Vibration High (乾式幫浦軸承高頻震動)',
+              guidance: '乾式真空幫浦抽速衰退，造成反應副產物氣體回流與前級管路壓力積累，其餘連鎖報警均為抽速不足之伴生現象。'
+            },
+            alarms: [
+              { time: '10:50:01.00', tool: 'ETCH-03', code: 'ALARM-4102', desc: 'Dry Pump Vibration > 4.5mm/s', level: 'CRITICAL (Root Cause)' },
+              { time: '10:50:01.40', tool: 'ETCH-03', code: 'ALARM-4109', desc: 'Foreline Pressure High (伴生)', level: 'WARNING' },
+              { time: '10:50:02.10', tool: 'ETCH-03', code: 'ALARM-3012', desc: 'Chamber Pump-down Timeout (伴生)', level: 'CRITICAL' },
+              { time: '10:50:02.80', tool: 'ETCH-03', code: 'ALARM-1002', desc: 'Turbo Molecular Pump Interlock (伴生)', level: 'WARNING' }
+            ]
+          },
+          scenario_he: {
+            root: {
+              title: '[ALARM-5509] Electrostatic Chuck He Flow Leak > 5.0 sccm (晶圓背壓氦氣微漏)',
+              guidance: '靜電吸盤表面或晶圓邊緣密封圈老化微漏，造成氦氣洩入反應腔導致局部電漿失真，建議排查吸盤密封狀況。'
+            },
+            alarms: [
+              { time: '10:52:10.00', tool: 'ETCH-03', code: 'ALARM-5509', desc: 'He Backside Leak Rate High', level: 'CRITICAL (Root Cause)' },
+              { time: '10:52:10.50', tool: 'ETCH-03', code: 'ALARM-5512', desc: 'Chuck Clamping Force Warning (伴生)', level: 'WARNING' },
+              { time: '10:52:11.10', tool: 'ETCH-03', code: 'ALARM-2033', desc: 'Wafer Edge Temp Non-uniform (伴生)', level: 'WARNING' },
+              { time: '10:52:11.80', tool: 'ETCH-03', code: 'ALARM-9905', desc: 'Optical Emission Endpoint Drift (伴生)', level: 'INFO' }
+            ]
+          }
+        };
+
+        const currentRootCause = computed(() => scenarioData[selectedScenario.value].root);
+        const currentScenarioAlarms = computed(() => scenarioData[selectedScenario.value].alarms);
+
+        const triggerAlarmStorm = () => {
+          simulatingStorm.value = true;
+          slidingWindowCountdown.value = 0.0;
+          playBeep(300, 0.3);
+          const stepInterval = (configWindowSeconds.value * 1000) / 16;
+          const interval = setInterval(() => {
+            if (slidingWindowCountdown.value < configWindowSeconds.value) {
+              slidingWindowCountdown.value = parseFloat((slidingWindowCountdown.value + 0.5).toFixed(1));
+              playBeep(700, 0.04);
+            } else {
+              clearInterval(interval);
+              simulatingStorm.value = false;
+              playBeep(900, 0.2);
+            }
+          }, stepInterval);
+        };
+
+        // 平板決策樹排解步驟 (動態計算信心度與 Interlock)
+        const selectedActionIndex = ref(0);
+        const baseActions = ref([
+          {
+            id: 'act_1',
+            title: '處置 1: 更換 RF Matcher 匹配箱電容組件並執行回歸零點校準',
+            sourceType: 'EAM',
+            sourceTag: 'EAM 換件驗證 (最高權重)',
+            manualBinding: 'Lam Kiyo SOP Sec 4.3 Rev D (原廠手冊綁定)',
+            partNumber: 'EAM-PART-4402-RF-MATCH-C45',
+            description: '阻抗失諧為主因，更換已損耗之真空可變電容，確認接觸器無氧化碳化，並以測試模式送電 50W 檢驗反向功率。',
+            showInterlockDetail: false,
+            interlockConditions: [
+              { name: 'RF 射頻主電源斷電確認', current: '0 W (Off)', required: '0 W', ok: true },
+              { name: 'Chamber 腔體抽至基準真空', current: '0.024 mTorr', required: '< 0.05 mTorr', ok: true },
+              { name: '特用氣體管閥氣密鎖定', current: 'Interlock Engaged', required: 'Engaged', ok: true }
+            ]
+          },
+          {
+            id: 'act_2',
+            title: '處置 2: 檢查節流閥 (Throttle Valve) 擺角傳感器線路與電磁線圈',
+            sourceType: 'EAP',
+            sourceTag: 'EAP 參數微調紀錄',
+            manualBinding: 'Vendor SOP Ch 7 Valve Calibration',
+            partNumber: 'EAM-PART-1109-THROT-SENSOR',
+            description: '次級排查：若電容正常，排查節流閥反饋線路是否受高頻射頻干擾導致壓力追隨延遲。',
+            showInterlockDetail: false,
+            interlockConditions: [
+              { name: '腔體壓力釋放', current: 'Safe Range', required: 'Safe Vacuum', ok: true },
+              { name: '安全護蓋 Interlock 狀態', current: 'Closed', required: 'Closed', ok: true }
+            ]
+          },
+          {
+            id: 'act_3',
+            title: '處置 3: 拆卸腔體上蓋執行濕式擦拭清潔 (Clean Room Wet Clean)',
+            sourceType: '8D',
+            sourceTag: '歷史 8D 報告 (降權)',
+            manualBinding: 'PM Protocol P-09 (需工程主管審批)',
+            partNumber: 'PM-KIT-ETCH-CHAMBER-WIPE',
+            description: '若上述皆排除，可能為腔體聚合物過度沉積導致電弧擊穿，需降溫並進行預防保養。',
+            showInterlockDetail: false,
+            interlockConditions: [
+              { name: '腔體溫度冷卻至室溫', current: '65.2 °C', required: '< 35.0 °C', ok: false },
+              { name: '工程主管電子簽核授權', current: 'Pending Approval', required: 'Approved', ok: false }
+            ]
+          }
+        ]);
+
+        // 動態信心度與互鎖過濾計算
+        const sortedActions = computed(() => {
+          return baseActions.value.map(act => {
+            let baseW = 0.5;
+            if (act.sourceType === 'EAM') baseW = configWeightEAM.value;
+            else if (act.sourceType === 'EAP') baseW = configWeightEAP.value;
+            else if (act.sourceType === '8D') baseW = configWeight8D.value;
+
+            // 時間衰減權重: W * e^(-0.693 / decayDays * deltaT)
+            const deltaT = 20; // 假設案例距今 20 天
+            const decayFactor = Math.exp(- (Math.LN2 / decayDays.value) * deltaT);
+            const calculatedConf = Math.min(99, Math.round(baseW * decayFactor * 100));
+
+            // 動態檢核 Interlock 條件
+            let isPassed = true;
+            if (act.id === 'act_1') {
+              isPassed = machineStatus.value.vacuum < configInterlockVacuum.value && machineStatus.value.rfPower <= configInterlockRF.value;
+            } else if (act.id === 'act_3') {
+              isPassed = machineStatus.value.temp < configInterlockTemp.value;
+            }
+
+            return {
+              ...act,
+              calculatedConfidence: calculatedConf,
+              isInterlockPassed: isPassed
+            };
+          });
+        });
+
+        const selectAction = (idx) => {
+          selectedActionIndex.value = idx;
+          playBeep(520, 0.08);
+        };
+
+        const toggleInterlockDetail = (idx) => {
+          baseActions.value[idx].showInterlockDetail = !baseActions.value[idx].showInterlockDetail;
+        };
+
+        // 15 秒極速閉環回流與 8D
+        const isRecording = ref(false);
+        const voiceTranscript = ref('');
+        const submittingFeedback = ref(false);
+        const lastClosureReport = ref('');
+        const feedbackDuration = ref(11.4);
+        const copySuccess = ref(false);
+
+        const speechTemplates = ref([
+          '更換 Matcher 電容並重測阻抗，送電 100W 反向功率 0W，真空回升正常。',
+          '抽不到 Base Vacuum，檢查門圈 O-ring 已清潔並重新潤滑。',
+          '節流閥角度校準完成，壓力響應在 0.8s 內收斂至設定值。',
+          '吸盤氦氣背壓洩漏率已降至 0.2 sccm，回測合格。'
+        ]);
+
+        const applySpeechTemplate = (phrase) => {
+          voiceTranscript.value = phrase;
+          playBeep(650, 0.05);
+        };
+
+        const toggleVoiceRecord = () => {
+          if (!isRecording.value) {
+            isRecording.value = true;
+            voiceTranscript.value = '骨傳導抗噪語音辨識中...';
+            playBeep(800, 0.1);
+            setTimeout(() => {
+              isRecording.value = false;
+              voiceTranscript.value = '「已更換 Matcher 電容並重新校正 RF 阻抗，回測反向功率為 0W，稼動恢復正常，結案。」';
+              playBeep(900, 0.1);
+            }, 2000);
+          } else {
+            isRecording.value = false;
+          }
+        };
+
+        const submitFastFeedback = () => {
+          submittingFeedback.value = true;
+          playBeep(500, 0.1);
+          setTimeout(() => {
+            submittingFeedback.value = false;
+            lastClosureReport.value = `[8D-20261127-FM${Math.floor(Math.random()*9000)+1000}] ${activeTool.value.id} Chamber A 異常排除確認：採用處置 1 更換 Matcher 電容，稼動已恢復，耗時 11.4 秒完成無塵室閉環！`;
+            playBeep(1040, 0.2);
+          }, 700);
+        };
+
+        const copyReport = () => {
+          const reportText = generate8DReportText();
+          navigator.clipboard.writeText(reportText).then(() => {
+            copySuccess.value = true;
+            setTimeout(() => { copySuccess.value = false; }, 2000);
+          });
+        };
+
+        const downloadReport = () => {
+          const reportText = generate8DReportText();
+          const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `8D_Report_${activeTool.value.id}_${Date.now()}.txt`;
+          link.click();
+          URL.revokeObjectURL(url);
+        };
+
+        const generate8DReportText = () => {
+          return `=====================================================
+FabMind v3.0 晶圓廠半導體設備 8D 異常結案改善報告
+=====================================================
+【D1 處置團隊】: FabMind 零信任知識協作組 (竹科/熊本/亞利桑那跨廠協同)
+【D2 問題描述】: 機台 ${activeTool.value.id} Chamber A 於 Step 104 觸發連鎖警報風暴。
+【D3 臨時圍堵】: 邊緣過濾層啟用 ${configWindowSeconds.value} 秒滑動視窗聚合，鎖定首發根因。
+【D4 根本原因】: ${currentRootCause.value.title}
+【D5 永久對策】: 執行處置方案 1 (更換 RF Matcher 電容並依 Lam Kiyo SOP Sec 4.3 Rev D 校準)。
+【D6 效果驗證】: 硬體互鎖 Interlock 驗證通過，反向功率恢復 0W，稼動恢復正常。
+【D7 防呆預防】: 知識圖譜動態調升成功處置權重 (+0.12)，並列入 Copy Exactly 監控。
+【D8 團隊結案】: 耗時 11.4 秒完成無塵室人機協作閉環。
+=====================================================
+報告產生時間: ${new Date().toISOString()}
+系統驗證簽章: FabMind-Zero-Trust-Verified-OK`;
+        };
+
+        // 因果圖譜與 ECN 模擬
+        const ecnActive = ref(false);
+        const triggerECNUpdate = () => {
+          ecnActive.value = !ecnActive.value;
+          playBeep(ecnActive.value ? 400 : 700, 0.15);
+          drawCausalGraph();
+        };
+
+        // 冷啟動精靈推演
+        const coldStartImporting = ref(false);
+        const triggerColdStartImport = () => {
+          coldStartImporting.value = true;
+          playBeep(600, 0.1);
+          setTimeout(() => {
+            coldStartImporting.value = false;
+            playBeep(1200, 0.25);
+            alert('🎉 新世代機型冷啟動推演完成！成功透過共用零組件映射繼承 237 筆經驗！');
+          }, 1200);
+        };
+
+        const toggleCleanroomMode = () => {
+          cleanroomMode.value = !cleanroomMode.value;
+          playBeep(cleanroomMode.value ? 750 : 550, 0.1);
+        };
+
+        const changeTab = (tabId) => {
+          currentTab.value = tabId;
+          playBeep(500, 0.05);
+          if (tabId === 'crossfab') {
+            setTimeout(renderWaveformChart, 200);
+          } else if (tabId === 'graph') {
+            setTimeout(drawCausalGraph, 200);
+          }
+        };
+
+        // Canvas 因果圖譜繪製
+        const drawCausalGraph = () => {
+          const canvas = document.getElementById('causalGraphCanvas');
+          if (!canvas) return;
+          const ctx = canvas.getContext('2d');
+          canvas.width = canvas.parentElement.clientWidth;
+          canvas.height = 280;
+
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          const centerX = canvas.width / 2;
+          const centerY = canvas.height / 2;
+
+          const nodes = [
+            { x: centerX - 180, y: centerY - 50, label: 'SECS 警報: 7721', color: '#EF4444', r: 18 },
+            { x: centerX, y: centerY - 60, label: '首發根因: Matcher 電容失諧', color: '#06B6D4', r: 24 },
+            { x: centerX + 180, y: centerY - 60, label: `EAM 換料: C45 (${configWeightEAM.value})`, color: '#10B981', r: 20 },
+            { x: centerX + 120, y: centerY + 60, label: 'SOP 原廠章節: Sec 4.3', color: '#A855F7', r: 16 },
+            { x: centerX - 120, y: centerY + 60, label: '伴生警報: 壓力漂移 (抑制)', color: '#64748B', r: 14 }
+          ];
+
+          // 繪製連線
+          ctx.strokeStyle = '#1E293B';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(nodes[0].x, nodes[0].y);
+          ctx.lineTo(nodes[1].x, nodes[1].y);
+          ctx.lineTo(nodes[2].x, nodes[2].y);
+          ctx.moveTo(nodes[1].x, nodes[1].y);
+          ctx.lineTo(nodes[3].x, nodes[3].y);
+          ctx.moveTo(nodes[0].x, nodes[0].y);
+          ctx.lineTo(nodes[4].x, nodes[4].y);
+          ctx.stroke();
+
+          // 繪製節點
+          nodes.forEach((n, idx) => {
+            let nodeColor = n.color;
+            if (ecnActive.value && idx === 2) {
+              nodeColor = '#EF4444';
+            }
+
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+            ctx.fillStyle = nodeColor;
+            ctx.shadowColor = nodeColor;
+            ctx.shadowBlur = 12;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '11px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(n.label, n.x, n.y + n.r + 16);
+          });
+        };
+
+        // Chart.js 波形比對渲染 (連動容差帶)
+        let waveformChartInstance = null;
+        const isWaveformAlert = computed(() => {
+          // 若當前偏離 3.4% > 設定的容許門檻，則觸發早期警報
+          return 3.4 >= configWaveformTolerance.value;
+        });
+
+        const renderWaveformChart = () => {
+          const ctx = document.getElementById('waveformCanvas');
+          if (!ctx) return;
+
+          if (waveformChartInstance) {
+            waveformChartInstance.destroy();
+          }
+
+          const labels = ['0.0s', '1.0s', '2.0s', '3.0s', '4.0s', '5.0s', '6.0s', '7.0s', '8.0s', '9.0s', '10.0s'];
+          let goldenData = [12.0, 12.1, 12.2, 12.3, 12.4, 12.4, 12.4, 12.3, 12.2, 12.1, 12.0];
+          let currentData = [12.0, 12.2, 12.5, 12.8, 12.9, 13.0, 13.1, 12.9, 12.7, 12.5, 12.3];
+
+          const tolDelta = (configWaveformTolerance.value / 100) * 12.0;
+          let upperTolerance = goldenData.map(v => v + tolDelta);
+          let lowerTolerance = goldenData.map(v => v - tolDelta);
+
+          if (selectedWaveformSensor.value === 'rf_reflected') {
+            goldenData = [2, 3, 5, 4, 3, 3, 4, 3, 3, 2, 2];
+            currentData = [2, 4, 8, 12, 14, 15, 13, 11, 8, 5, 3];
+            const tolRf = configWaveformTolerance.value * 1.5;
+            upperTolerance = goldenData.map(v => v + tolRf);
+            lowerTolerance = goldenData.map(v => Math.max(0, v - tolRf));
+          }
+
+          waveformChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels,
+              datasets: [
+                {
+                  label: '台灣母廠 Golden Tool (黃金基準曲線)',
+                  data: goldenData,
+                  borderColor: '#10B981',
+                  backgroundColor: 'transparent',
+                  borderWidth: 2.5,
+                  tension: 0.3
+                },
+                {
+                  label: '海外廠即時實測曲線 (ETCH-03)',
+                  data: currentData,
+                  borderColor: isWaveformAlert.value ? '#EF4444' : '#F59E0B',
+                  backgroundColor: 'transparent',
+                  borderWidth: 2,
+                  borderDash: [5, 5],
+                  tension: 0.3
+                },
+                {
+                  label: `Golden 規格安全容差帶上限 (+${configWaveformTolerance.value}%)`,
+                  data: upperTolerance,
+                  borderColor: 'rgba(6, 182, 212, 0.4)',
+                  backgroundColor: 'rgba(6, 182, 212, 0.05)',
+                  borderWidth: 1,
+                  fill: '+1',
+                  tension: 0.3,
+                  pointRadius: 0
+                },
+                {
+                  label: `Golden 規格安全容差帶下限 (-${configWaveformTolerance.value}%)`,
+                  data: lowerTolerance,
+                  borderColor: 'rgba(6, 182, 212, 0.4)',
+                  backgroundColor: 'transparent',
+                  borderWidth: 1,
+                  tension: 0.3,
+                  pointRadius: 0
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  labels: { color: '#94A3B8', font: { size: 11 } }
+                }
+              },
+              scales: {
+                x: {
+                  ticks: { color: '#64748B' },
+                  grid: { color: '#1E293B' }
+                },
+                y: {
+                  ticks: { color: '#64748B' },
+                  grid: { color: '#1E293B' }
+                }
+              }
+            }
+          });
+        };
+
+        onMounted(() => {
+          setTimeout(() => {
+            renderWaveformChart();
+          }, 300);
+        });
+
+        return {
+          cleanroomMode,
+          soundEnabled,
+          currentFab,
+          currentTab,
+          userRole,
+          tabs,
+          equipmentList,
+          activeTool,
+          selectEquipment,
+          toggleSound,
+          selectedScenario,
+          currentRootCause,
+          currentScenarioAlarms,
+          slidingWindowCountdown,
+          simulatingStorm,
+          rawAlarmCount,
+          triggerAlarmStorm,
+          selectedActionIndex,
+          sortedActions,
+          selectAction,
+          toggleInterlockDetail,
+          isRecording,
+          voiceTranscript,
+          submittingFeedback,
+          lastClosureReport,
+          feedbackDuration,
+          copySuccess,
+          speechTemplates,
+          applySpeechTemplate,
+          toggleVoiceRecord,
+          submitFastFeedback,
+          copyReport,
+          downloadReport,
+          decayDays,
+          drawCausalGraph,
+          coldStartImporting,
+          triggerColdStartImport,
+          ecnActive,
+          triggerECNUpdate,
+          toggleCleanroomMode,
+          changeTab,
+          selectedWaveformSensor,
+          renderWaveformChart,
+          configWindowSeconds,
+          configJitterMs,
+          configWeightEAM,
+          configWeightEAP,
+          configWeight8D,
+          configInterlockVacuum,
+          configInterlockTemp,
+          configInterlockRF,
+          configWaveformTolerance,
+          uiScale,
+          resetToDefaults,
+          calculatedSuppressionRate,
+          isWaveformAlert,
+          machineStatus
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
