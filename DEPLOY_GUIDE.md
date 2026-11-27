@@ -4,7 +4,38 @@
 
 ---
 
-## 方案一：Netlify Drop（推薦！最簡單，30 秒零代碼上線）
+## 方案一：Cloudflare Pages（最推薦！全球 Anycast CDN，永久免費，速度最快）
+
+Cloudflare Pages 是當前全球效能最強、資安防護最嚴密的免費靜態網站代管服務，自帶免費 SSL 憑證與全球 300+ 邊緣節點加速。
+
+### 方式 A：透過 Cloudflare 網頁控制台連結 GitHub 倉庫（最推薦，1 分鐘搞定）
+1. 打開瀏覽器，前往 [Cloudflare 控制台](https://dash.cloudflare.com/) 並登入。
+2. 在左側選單點選 **Workers 與 Pages (Workers & Pages)**。
+3. 點擊 **建立應用程式 (Create application)** ➔ 選擇 **Pages** 標籤。
+4. 點選 **連線至 Git (Connect to Git)**。
+5. 授權並選取您的 GitHub 儲存庫：`loveelysia5291/FabMind-v3.0`。
+6. 設定建置參數：
+   - **專案名稱 (Project name)**：`fabmind-v3`（或自訂）
+   - **生產分支 (Production branch)**：`main`
+   - **架構預設 (Framework preset)**：`None`（保持預設無架構）
+   - **建置命令 (Build command)**：*(留空)*
+   - **建置輸出目錄 (Build output directory)**：`.`（或輸入根目錄）
+7. 點擊 **儲存並部署 (Save and Deploy)**。
+8. 稍等約 20 秒，即部署完成！您將獲得一個專屬的全球網址：  
+   👉 **`https://fabmind-v3.pages.dev`**（名稱以您專案設定為準）。  
+   *日後您只要對 GitHub 進行任何 `git push`，Cloudflare 都會全自動重新建置並全球發布！*
+
+---
+
+### 方式 B：使用本機一鍵腳本部署 (deploy-cloudflare.bat)
+本專案已為您預先配置好 `wrangler.toml`、`_headers`、`_routes.json` 以及一鍵批次檔：
+1. 在檔案總管進入目錄 `C:\Users\USER\.gemini\antigravity\scratch\fabmind-system`。
+2. 雙擊執行 **`deploy-cloudflare.bat`**。
+3. 若初次使用，終端機會自動在瀏覽器彈出 Cloudflare 授權頁面，點選授權後即可一鍵發布！
+
+---
+
+## 方案二：GitHub Pages（團隊永久免費託管）
 
 這是最快將 FabMind 放上公網供任何人點擊訪問的方法：
 
