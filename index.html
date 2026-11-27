@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FabMind v3.0 | 晶圓製造與先進封測 (CoWoS/ATE) 智慧排解站</title>
+  <title>FabMind v3.0 | 晶圓製造與先進封測智慧排解站</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Chart.js CDN -->
@@ -131,6 +131,92 @@
 
     <!-- 主內容區塊 -->
     <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-5">
+
+      <!-- ================= ⚡ 全新：實時時間與電氣功耗監控儀表 (Real-time Power & Telemetry) ================= -->
+      <div class="bg-fab-card rounded-2xl border border-cyan-500/30 p-4 shadow-xl">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-3">
+          
+          <!-- 即時時間時鐘 -->
+          <div class="flex items-center space-x-3 font-mono">
+            <div class="w-3 h-3 rounded-full" :class="isPowerRunning ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'"></div>
+            <div>
+              <span class="text-xs text-slate-400 block font-sans">無塵室生產時鐘 (Real-time Clock)</span>
+              <span class="text-sm sm:text-base font-bold text-white tracking-wider">{{ liveClock }}</span>
+            </div>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-900 text-cyan-300 border border-slate-700">
+              運轉計時: {{ uptimeClock }}
+            </span>
+          </div>
+
+          <!-- 互動啟動控制按鈕 -->
+          <div class="flex items-center space-x-2">
+            <button @click="togglePower" :disabled="isRamping"
+              :class="isPowerRunning ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-600/30'"
+              class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5">
+              <span>{{ isPowerRunning ? '⏹️ 停止送電 (Power Off)' : '⚡ 點擊啟動機台送電 (Power On)' }}</span>
+            </button>
+            <button @click="triggerEStop" 
+              class="px-3 py-2 bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-500/40 rounded-xl text-xs font-bold transition">
+              🛑 緊急斷電 (E-Stop)
+            </button>
+          </div>
+        </div>
+
+        <!-- 5 大電氣與功耗數據儀表卡 -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-3 text-xs font-mono">
+          
+          <!-- 1. 即時輸出功率 -->
+          <div class="p-3 bg-slate-950/90 rounded-xl border border-slate-800 relative overflow-hidden">
+            <span class="text-slate-400 block font-sans">即時輸出功率 (Power)</span>
+            <div class="text-xl sm:text-2xl font-extrabold mt-1" :class="isPowerRunning ? 'text-cyan-400' : 'text-slate-500'">
+              {{ telemetry.power }} <span class="text-xs text-slate-400">W</span>
+            </div>
+            <!-- 爬坡進度條 -->
+            <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+              <div class="bg-cyan-400 h-full transition-all duration-300" :style="{ width: (telemetry.power / targetPower * 100) + '%' }"></div>
+            </div>
+          </div>
+
+          <!-- 2. 工作電壓 -->
+          <div class="p-3 bg-slate-950/90 rounded-xl border border-slate-800">
+            <span class="text-slate-400 block font-sans">工作電壓 (Voltage)</span>
+            <div class="text-xl sm:text-2xl font-extrabold mt-1" :class="isPowerRunning ? 'text-emerald-400' : 'text-slate-500'">
+              {{ telemetry.voltage }} <span class="text-xs text-slate-400">V</span>
+            </div>
+            <div class="text-[10px] text-slate-500 mt-1">三相 AC 380V 穩壓</div>
+          </div>
+
+          <!-- 3. 工作電流 -->
+          <div class="p-3 bg-slate-950/90 rounded-xl border border-slate-800">
+            <span class="text-slate-400 block font-sans">負載電流 (Current)</span>
+            <div class="text-xl sm:text-2xl font-extrabold mt-1" :class="isPowerRunning ? 'text-amber-400' : 'text-slate-500'">
+              {{ telemetry.current }} <span class="text-xs text-slate-400">A</span>
+            </div>
+            <div class="text-[10px] text-slate-500 mt-1">功率因數 PF: 0.98</div>
+          </div>
+
+          <!-- 4. 累積功耗電量 -->
+          <div class="p-3 bg-slate-950/90 rounded-xl border border-slate-800">
+            <span class="text-slate-400 block font-sans">累計能耗 (Energy)</span>
+            <div class="text-xl sm:text-2xl font-extrabold mt-1 text-purple-400">
+              {{ telemetry.energyKwh }} <span class="text-xs text-slate-400">kWh</span>
+            </div>
+            <div class="text-[10px] text-emerald-400 mt-1">實時秒級能耗統計</div>
+          </div>
+
+          <!-- 5. 阻抗反射功率 (RF/ATE) -->
+          <div class="p-3 bg-slate-950/90 rounded-xl border border-slate-800">
+            <span class="text-slate-400 block font-sans">反射功率 (Reflected)</span>
+            <div class="text-xl sm:text-2xl font-extrabold mt-1" :class="telemetry.reflected > 10 ? 'text-red-400 animate-pulse' : 'text-emerald-400'">
+              {{ telemetry.reflected }} <span class="text-xs text-slate-400">W</span>
+            </div>
+            <div class="text-[10px]" :class="telemetry.reflected > 10 ? 'text-red-400 font-bold' : 'text-slate-500'">
+              {{ telemetry.reflected > 10 ? '⚠️ 阻抗失諧跳變中' : '✔ 阻抗完美匹配' }}
+            </div>
+          </div>
+
+        </div>
+      </div>
 
       <!-- ================= 廠區即時真實數據總覽膠囊 ================= -->
       <div class="bg-fab-card rounded-2xl border border-fab-border p-4 shadow-lg">
@@ -456,7 +542,7 @@
 
   <!-- Vue 3 核心腳本 -->
   <script>
-    const { createApp, ref, computed } = Vue;
+    const { createApp, ref, computed, onMounted } = Vue;
 
     createApp({
       setup() {
@@ -467,13 +553,87 @@
         const closureSummary = ref('');
         const engineerNote = ref('');
 
+        // 實時時間與運轉計時器
+        const liveClock = ref('');
+        const uptimeSeconds = ref(15155); // 04:12:35 起步
+        const uptimeClock = computed(() => {
+          const h = String(Math.floor(uptimeSeconds.value / 3600)).padStart(2, '0');
+          const m = String(Math.floor((uptimeSeconds.value % 3600) / 60)).padStart(2, '0');
+          const s = String(uptimeSeconds.value % 60).padStart(2, '0');
+          return `${h}:${m}:${s}`;
+        });
+
+        // 實時電氣功耗數據 (Telemetry)
+        const isPowerRunning = ref(false);
+        const isRamping = ref(false);
+        const targetPower = computed(() => activeIndustryDomain.value === 'frontend' ? 1850 : 800);
+
+        const telemetry = ref({
+          power: 0,
+          voltage: 0,
+          current: 0,
+          energyKwh: 14.832,
+          reflected: 0
+        });
+
+        // 點擊啟動機台送電 (功率平滑爬坡)
+        const togglePower = () => {
+          if (!isPowerRunning.value) {
+            startPowerRamp();
+          } else {
+            stopPower();
+          }
+        };
+
+        const startPowerRamp = () => {
+          isRamping.value = true;
+          playBeep(440, 0.2);
+          let currentP = 0;
+          telemetry.value.voltage = 380.2;
+          const target = targetPower.value;
+          const step = target / 20;
+
+          const rampInterval = setInterval(() => {
+            currentP += step;
+            if (currentP >= target) {
+              clearInterval(rampInterval);
+              telemetry.value.power = target;
+              telemetry.value.current = parseFloat((target / 380).toFixed(2));
+              telemetry.value.reflected = machineState.value === 'alarm' ? 120 : (machineState.value === 'warning' ? 14 : 2);
+              isPowerRunning.value = true;
+              isRamping.value = false;
+              playBeep(880, 0.3);
+            } else {
+              telemetry.value.power = Math.round(currentP + (Math.random() * 8 - 4));
+              telemetry.value.current = parseFloat((telemetry.value.power / 380).toFixed(2));
+              playBeep(600 + (currentP / 5), 0.03);
+            }
+          }, 80);
+        };
+
+        const stopPower = () => {
+          isPowerRunning.value = false;
+          telemetry.value.power = 0;
+          telemetry.value.voltage = 0;
+          telemetry.value.current = 0;
+          telemetry.value.reflected = 0;
+          playBeep(300, 0.25);
+        };
+
+        const triggerEStop = () => {
+          stopPower();
+          setMachineState('alarm');
+          alert('🛑 緊急安全斷電 (E-Stop) 已觸發！全機高壓與射頻已強制開路斷開！');
+        };
+
         // 前段晶圓製造 vs 後段先進封測領域
-        const activeIndustryDomain = ref('backend'); // 預設展示先進封測 CoWoS
+        const activeIndustryDomain = ref('backend');
 
         const switchDomain = (domain) => {
           activeIndustryDomain.value = domain;
           closureSummary.value = '';
           engineerNote.value = '';
+          stopPower();
           playBeep(domain === 'backend' ? 750 : 550, 0.1);
           if (domain === 'backend') {
             currentFabKey.value = 'Chiayi_AP6';
@@ -482,9 +642,8 @@
           }
         };
 
-        // 廠區真實資料庫 (前段 Fab + 後段先進封測 OSAT)
+        // 廠區真實資料庫
         const fabsData = {
-          // 前段
           Hsinchu_Fab12B: {
             name: '台灣竹科 Fab 12B (R&D 母廠)',
             node: 'N2 / N3E 先進製程研發',
@@ -507,14 +666,13 @@
             mttr: 2.4,
             qualityPolicy: '超高產能連鎖警報即時壓制'
           },
-          // 後段先進封測
           Chiayi_AP6: {
             name: '台灣嘉義 AP6 (CoWoS / SoIC 先進封裝)',
             node: 'CoWoS-S / CoWoS-L (GPU + 8 HBM3e)',
             toolCount: 96,
             onlinePercent: 94.2,
             oee: 89.6,
-            yield: 98.2, // 昂貴模組，良率要求極端嚴苛
+            yield: 98.2,
             overkillRate: 0.08,
             mttr: 1.8,
             qualityPolicy: '防範整顆 GPU+HBM 複合模組報廢 (KGD 保證)'
@@ -960,6 +1118,9 @@
           machineState.value = st;
           closureSummary.value = '';
           engineerNote.value = '';
+          if (st === 'alarm') {
+            stopPower();
+          }
           playBeep(st === 'alarm' ? 400 : 700, 0.1);
         };
 
@@ -1039,6 +1200,25 @@ ${extra}
           URL.revokeObjectURL(url);
         };
 
+        // 時鐘定期每秒跳動
+        onMounted(() => {
+          const updateClock = () => {
+            const now = new Date();
+            liveClock.value = now.toLocaleDateString() + ' ' + now.toTimeString().split(' ')[0];
+            uptimeSeconds.value++;
+
+            // 若在送電中，累計耗電度數微量上升
+            if (isPowerRunning.value) {
+              telemetry.value.energyKwh = parseFloat((telemetry.value.energyKwh + 0.0005).toFixed(3));
+              // 微幅波動模擬真實雜訊
+              telemetry.value.power = Math.round(targetPower.value + (Math.random() * 6 - 3));
+              telemetry.value.current = parseFloat((telemetry.value.power / 380.2).toFixed(2));
+            }
+          };
+          updateClock();
+          setInterval(updateClock, 1000);
+        });
+
         return {
           cleanroomMode,
           soundEnabled,
@@ -1061,7 +1241,15 @@ ${extra}
           closureSummary,
           copyState,
           copy8D,
-          download8D
+          download8D,
+          liveClock,
+          uptimeClock,
+          isPowerRunning,
+          isRamping,
+          telemetry,
+          targetPower,
+          togglePower,
+          triggerEStop
         };
       }
     }).mount('#app');
